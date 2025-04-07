@@ -21,7 +21,8 @@ class GUI:
         self.first_tool_tip = cv2.imread("{}/graphics/{}.png".format(dir_path, "tip_1_cr_first"), 0)
         self.tool_tips = [cv2.imread("{}/graphics/{}.png".format(dir_path, tip), 0) for tip in tool_tip_dict]
 
-        self.step = 25
+        self.radius_threshold = 5
+        self.step = 20
         self.dx = 0
         self.dy = 0
         self.cycle = 1
@@ -69,7 +70,7 @@ class GUI:
             cv2.imshow("Tool tip", self.tool_tips[index + 4])
         else:
             cv2.imshow("Tool tip", self.tool_tips[index - 1])
-
+            
     def key_listener(self, key: int) -> None:
         try:
             key = chr(key)
@@ -203,6 +204,14 @@ class GUI:
             # Terminate tracking
             config.engine.release()
 
+        param_dict = {
+            "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
+            "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
+            "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
+            }
+
+        logger.info(f"loaded parameters:\n{param_dict}")
+
     def arm(self, width: int, height: int) -> None:
         self.fps = np.round(1/config.arguments.fps, 2)
 
@@ -262,14 +271,14 @@ class GUI:
 
     def place_cross(self, source: np.ndarray, point: tuple, color: tuple) -> None:
         try:
-            source[to_int(point[1] - 3):to_int(point[1] + 4), to_int(point[0])] = color
-            source[to_int(point[1]), to_int(point[0] - 3):to_int(point[0] + 4)] = color
+            source[to_int(point[1] - 20):to_int(point[1] + 19), to_int(point[0]-1):to_int(point[0]+1)] = color
+            source[to_int(point[1]-1):to_int(point[1]+1), to_int(point[0] - 20):to_int(point[0] + 19)] = color
         except:
             pass
 
 
     def update_record(self, frame_preview) -> None:
-        #cv2.imshow("Recording", frame_preview)
+        cv2.imshow("Recording", frame_preview)
         if cv2.waitKey(1) == ord('q'):
             config.engine.release()
 
@@ -285,7 +294,7 @@ class GUI:
             self.place_cross(source_rgb, pupil_center, red)
             return True
         except Exception as e:
-            logger.info(f"pupil not found: {e}")
+            #logger.info(f"pupil not found: {e}")
             return False
 
     def cr_1(self, source_rgb):
@@ -387,14 +396,9 @@ class GUI:
         center_offset_generater() to adjust the cursor calue.
         """
 
-        # Tries to lock on to the pupil with the current cursor value
-        self.pupil_processor.reset(self.cursor)
-        self.pupil_ = self.pupil
-        
-        
         try:
             # If sucessful, tracking is initiated
-            if self.pupil_processor.fit_model.params[1] > 10:
+            if self.pupil_processor.fit_model.params[1] > self.radius_threshold:
                 
                 param_dict = {
                     "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
@@ -429,6 +433,10 @@ class GUI:
         except:
             pass
         
+        # Tries to lock on to the pupil with the current cursor value
+        self.pupil_processor.reset(self.cursor)
+        self.pupil_ = self.pupil
+
     def center_offset_generator(self):
         """
         This method changes the value of cursor for searching the pupil.
@@ -443,7 +451,7 @@ class GUI:
         if self.cycle == 1:                             # Initial position
             self.dx = - self.step * self.circle_size
             self.dy = - self.step * self.circle_size
-            print("x: " + str(self.dx) + ", y: " + str(self.dy))
+            #print("x: " + str(self.dx) + ", y: " + str(self.dy))
         elif self.cycle < (4 + 2*(self.circle_size-1)): # Top side
             self.dx += self.step            
         elif self.cycle < (6 + 4*(self.circle_size-1)): # Right side

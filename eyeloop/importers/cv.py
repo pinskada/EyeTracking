@@ -28,10 +28,14 @@ class Importer(IMPORTER):
                 self.capture = cv2.VideoCapture(str(self.vid_path))
 
             self.route_frame = self.route_cam
-            width = self.capture.get(cv2.CAP_PROP_FRAME_WIDTH)
-            height = self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
             _, image = self.capture.read()
+
+            image = self.crop(image)
+
+            width = image.shape[1]
+            height = image.shape[0]
+
             if self.capture.isOpened():
                 try:
                     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

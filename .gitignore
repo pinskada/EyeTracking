@@ -110,4 +110,4 @@ data/
 *.avi
 *.mp4
 
-.vscode\launch.json
+.vscode/launch.json

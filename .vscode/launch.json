@@ -11,7 +11,7 @@
             "request": "launch",
             "module": "eyeloop.run_eyeloop",
             "args": [
-                //"-v", "testVideoNoCRoffset.mp4",
+                "-v", "testVideoNoCRoffset.mp4",
                 "-sc", "0.4",
                 "-m", "circular",
                 "-p", "pupil_parameters.npy",

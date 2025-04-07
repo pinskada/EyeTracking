@@ -109,3 +109,5 @@ venv.bak/
 data/
 *.avi
 *.mp4
+
+.vscode\launch.json

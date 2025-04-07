@@ -73,6 +73,7 @@ class Importer(IMPORTER):
                 break
 
     def proceed(self, image) -> None:
+        image = self.crop(image)
         image = self.resize(image)
         self.rotate_(image, config.engine.angle)
         config.engine.iterate(image)

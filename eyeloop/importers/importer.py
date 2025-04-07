@@ -63,6 +63,21 @@ class IMPORTER:
 
         return cv2.resize(image, None, fx=self.scale, fy=self.scale, interpolation=cv2.INTER_NEAREST)
 
+    def crop(self, image: np.ndarray) -> np.ndarray:
+        """
+        Crops the input frame to predefined area.
+        Before the engine locks on the pupil just left/right area of the frame is selected.
+        After localisation, the area shrinks just around the eye.
+        """
+        half_width = image.shape[1]//2
+        if config.arguments.side == "L":
+
+            return image[:, :half_width]
+        
+        elif config.arguments.side == "R":
+
+            return image[:, half_width:]
+
     def save(self, image: np.ndarray) -> None:
         config.file_manager.save_image(image, self.frame)
 

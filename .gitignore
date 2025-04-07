@@ -108,3 +108,4 @@ venv.bak/
 # eyeloop generated files
 data/
 *.avi
+*.mp4

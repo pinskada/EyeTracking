@@ -371,3 +371,89 @@ class GUI:
 
 
             config.engine.release()
+
+    def pupil_lock(self):
+        """
+        This method tries to lock on to the pupil. If sucessful it initiates the tracking algorithm. If not, it calls
+        center_offset_generater() to adjust the cursor calue.
+        """
+
+        # Tries to lock on to the pupil with the current cursor value
+        self.pupil_processor.reset(self.cursor)
+        self.pupil_ = self.pupil
+        
+        
+        try:
+            # If sucessful, tracking is initiated
+            if self.pupil_processor.fit_model.params[1] > 10:
+
+                self.locked = True
+                self.inquiry = "track"
+
+                print("Initiating tracking..")
+                self.remove_mousecallback()
+                cv2.destroyWindow("CONFIGURATION")
+                cv2.destroyWindow("BINARY")
+                cv2.destroyWindow("Tool tip")
+
+                cv2.imshow("TRACKING", self.bin_stock)
+                cv2.moveWindow("TRACKING", 100, 100)
+
+                self._state = "tracking"
+
+                self.update = self.real_update
+
+                config.engine.activate()
+                return
+            else:
+                # If not sucessful cursor adjustment is made
+                self.center_offset_generator()
+                pass
+        except:
+            pass
+        
+    def center_offset_generator(self):
+        """
+        This method changes the value of cursor for searching the pupil.
+        It circles (moves in a square) around the centre of the images.
+        The position difference between the new and old cursor value is always in size of self.step.
+        After finishing a whole circle (square) a new and bigger one will initiate with radius of self.step * self.circle_size.
+        Current position of the square is given by self.cycle
+        """
+
+        # Square value computation---------------------------------------------
+        
+        if self.cycle == 1:                             # Initial position
+            self.dx = - self.step * self.circle_size
+            self.dy = - self.step * self.circle_size
+            print("x: " + str(self.dx) + ", y: " + str(self.dy))
+        elif self.cycle < (4 + 2*(self.circle_size-1)): # Top side
+            self.dx += self.step            
+        elif self.cycle < (6 + 4*(self.circle_size-1)): # Right side
+            self.dy += self.step
+        elif self.cycle < (8 + 6*(self.circle_size-1)): # Bottom side
+            self.dx -= self.step
+        else:                                           # Left side
+            self.dy -= self.step
+             
+
+        # Value assignment-----------------------------------------------------
+
+        # Assing a new value to cursor
+        self.cursor = (self.centre[0] + self.dx, self.centre[1] + self.dy)
+
+        # Return if cursor is beyond window
+        if self.cursor[0] > self.binary_width | self.cursor[1] > self.binary_height:
+            print("No pupil find, exiting.")
+            return
+
+        # Iteration------------------------------------------------------------
+
+        # Check whether a whole circle around centre has been made
+        if self.cycle % (8 * self.circle_size) == 0:
+            self.circle_size += 1 # Next circle will be bigger
+            self.cycle = 1 # Reset cycle count
+            return
+        
+        # Increase cycle count for next search
+        self.cycle += 1 

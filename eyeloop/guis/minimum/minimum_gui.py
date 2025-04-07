@@ -21,8 +21,6 @@ class GUI:
         self.first_tool_tip = cv2.imread("{}/graphics/{}.png".format(dir_path, "tip_1_cr_first"), 0)
         self.tool_tips = [cv2.imread("{}/graphics/{}.png".format(dir_path, tip), 0) for tip in tool_tip_dict]
 
-        self.radius_threshold = 5
-        self.step = 20
         self.dx = 0
         self.dy = 0
         self.cycle = 1
@@ -398,7 +396,7 @@ class GUI:
 
         try:
             # If sucessful, tracking is initiated
-            if self.pupil_processor.fit_model.params[1] > self.radius_threshold:
+            if self.pupil_processor.fit_model.params[1] > config.arguments.radius_threshold:
                 
                 param_dict = {
                     "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
@@ -441,25 +439,27 @@ class GUI:
         """
         This method changes the value of cursor for searching the pupil.
         It circles (moves in a square) around the centre of the images.
-        The position difference between the new and old cursor value is always in size of self.step.
-        After finishing a whole circle (square) a new and bigger one will initiate with radius of self.step * self.circle_size.
+        The position difference between the new and old cursor value is always in size of step.
+        After finishing a whole circle (square) a new and bigger one will initiate with radius of step * self.circle_size.
         Current position of the square is given by self.cycle
         """
 
         # Square value computation---------------------------------------------
         
+        step = config.arguments.search_step
+
         if self.cycle == 1:                             # Initial position
-            self.dx = - self.step * self.circle_size
-            self.dy = - self.step * self.circle_size
+            self.dx = - step * self.circle_size
+            self.dy = - step * self.circle_size
             #print("x: " + str(self.dx) + ", y: " + str(self.dy))
         elif self.cycle < (4 + 2*(self.circle_size-1)): # Top side
-            self.dx += self.step            
+            self.dx += step            
         elif self.cycle < (6 + 4*(self.circle_size-1)): # Right side
-            self.dy += self.step
+            self.dy += step
         elif self.cycle < (8 + 6*(self.circle_size-1)): # Bottom side
-            self.dx -= self.step
+            self.dx -= step
         else:                                           # Left side
-            self.dy -= self.step
+            self.dy -= step
              
 
         # Value assignment-----------------------------------------------------

@@ -20,6 +20,8 @@ class Arguments:
         self.tracking = None
         self.model = None
         self.side = None
+        self.radius_threshold = None
+        self.search_step = None
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
@@ -69,7 +71,13 @@ class Arguments:
         
         parser.add_argument("-s", "--side", default="B", type=str,
                             help="Chooses what side of the image to work with")
-
+        
+        parser.add_argument("-thr", "--radius_threshold", default = 5, type=int,
+                            help="Radius threshold for pupil fitting")
+        
+        parser.add_argument("-srs", "--search_step", default=20, type=int,
+                            help="Step with which the pupil search patterns increases")
+        
         return parser.parse_args(args)
 
     def build_config(self, parsed_args):
@@ -94,6 +102,8 @@ class Arguments:
         self.params = parsed_args.params
         self.blinkcalibration = parsed_args.blink
         self.side = parsed_args.side
+        self.radius_threshold = parsed_args.radius_threshold
+        self.search_step = parsed_args.search_step
         #self.blink = parsed_args.blink
 
     def parse_config(self, config: str) -> None:
@@ -143,5 +153,11 @@ class Arguments:
                 elif parameter == "side":
                     print("working with side: ", parameter)
                     self.side = parameter
+                elif parameter == "radius_threshold":
+                    print("pupil radius threshold: ", parameter)
+                    self.radius_threshold = parameter
+                elif parameter == "search_step":
+                    print("search step: ", parameter)
+                    self.radiussearch_step_threshold = parameter
 
             print("")

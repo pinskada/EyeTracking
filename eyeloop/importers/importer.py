@@ -78,6 +78,8 @@ class IMPORTER:
 
             return image[:, half_width:]
 
+        return image
+    
     def save(self, image: np.ndarray) -> None:
         config.file_manager.save_image(image, self.frame)
 

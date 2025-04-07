@@ -19,6 +19,7 @@ class Arguments:
         self.scale = None
         self.tracking = None
         self.model = None
+        self.side = None
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
@@ -65,6 +66,9 @@ class Arguments:
 
         parser.add_argument("-b", "--blink", default="", type=str,
                             help="Load blink calibration file (.npy)")
+        
+        parser.add_argument("-s", "--side", default="B", type=str,
+                            help="Chooses what side of the image to work with")
 
         return parser.parse_args(args)
 
@@ -89,6 +93,7 @@ class Arguments:
         self.clear = parsed_args.clear
         self.params = parsed_args.params
         self.blinkcalibration = parsed_args.blink
+        self.side = parsed_args.side
         #self.blink = parsed_args.blink
 
     def parse_config(self, config: str) -> None:
@@ -135,5 +140,8 @@ class Arguments:
                 elif parameter == "framerate":
                     print("framerate preset: ", parameter)
                     self.fps = parameter
+                elif parameter == "side":
+                    print("working with side: ", parameter)
+                    self.side = parameter
 
             print("")

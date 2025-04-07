@@ -21,6 +21,13 @@ class GUI:
         self.first_tool_tip = cv2.imread("{}/graphics/{}.png".format(dir_path, "tip_1_cr_first"), 0)
         self.tool_tips = [cv2.imread("{}/graphics/{}.png".format(dir_path, tip), 0) for tip in tool_tip_dict]
 
+        self.step = 25
+        self.dx = 0
+        self.dy = 0
+        self.cycle = 1
+        self.circle_size = 1
+        self.locked = False
+
         self._state = "adjustment"
         self.inquiry = "none"
         self.terminate = -1
@@ -169,7 +176,7 @@ class GUI:
             elif "d" == key:
 
                 if self.current_cr_processor.blur[0] > 1:
-                    self.current_cr_processor.blur == tuple([x - 2 for x in self.current_cr_processor.blur])
+                    self.current_cr_processor.blur = tuple([x - 2 for x in self.current_cr_processor.blur])
                 # print("Corneal reflex blurring decreased (%s)." % self.CRProcessor.blur)
 
             elif "r" == key:
@@ -218,7 +225,7 @@ class GUI:
         self.bin_P = self.bin_stock.copy()
         self.bin_CR = self.bin_stock.copy()
         #self.CRStock = self.bin_stock.copy()
-
+        
         self.src_txt = np.zeros((20, width, 3))
         self.prev_txt = self.src_txt.copy()
         cv2.putText(self.src_txt, 'Source', (15, 12), font, .7, (255, 255, 255), 0, cv2.LINE_4)
@@ -246,6 +253,7 @@ class GUI:
         cv2.imshow("Tool tip", self.first_tool_tip)
 
         cv2.moveWindow("Tool tip", 100, 1000 + height + 100)
+        
         try:
             cv2.setMouseCallback("CONFIGURATION", self.mousecallback)
             cv2.setMouseCallback("Tool tip", self.tip_mousecallback)
@@ -261,7 +269,7 @@ class GUI:
 
 
     def update_record(self, frame_preview) -> None:
-        cv2.imshow("Recording", frame_preview)
+        #cv2.imshow("Recording", frame_preview)
         if cv2.waitKey(1) == ord('q'):
             config.engine.release()
 
@@ -341,20 +349,21 @@ class GUI:
             self.bin_CR[0:20, 0:self.binary_width] = self.crstock_txt
             pass
 
-
-
-
-        #print(cr_area)
-
         cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
         cv2.imshow("CONFIGURATION", source_rgb)
-        #self.out.write(source_rgb)
+        self.out.write(source_rgb)
 
         self.key_listener(cv2.waitKey(50))
         if self.first_run:
-            #cv2.destroyAllWindows()
-            self.first_run = False
+                #cv2.destroyAllWindows()
+                self.first_run = False
+                self.centre = (round(self.binary_width/2), round(self.binary_height/2))
+                self.cursor = self.centre
+        else:
 
+            if self.locked == False:
+
+                self.pupil_lock()
 
     def real_update(self, img) -> None:
         source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -386,6 +395,14 @@ class GUI:
         try:
             # If sucessful, tracking is initiated
             if self.pupil_processor.fit_model.params[1] > 10:
+                
+                param_dict = {
+                    "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
+                    "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
+                    "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
+                    }
+
+                logger.info(f"loaded parameters:\n{param_dict}")
 
                 self.locked = True
                 self.inquiry = "track"

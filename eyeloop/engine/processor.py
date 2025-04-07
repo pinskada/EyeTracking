@@ -25,7 +25,7 @@ class Shape():
         self.walkout_offset = 0
 
         self.binarythreshold = -1
-        self.blur = [3, 3]
+        self.blur = (3, 3)
         self.type = type
         self.fit_ = lambda: None
 

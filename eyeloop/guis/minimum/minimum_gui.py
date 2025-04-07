@@ -169,7 +169,7 @@ class GUI:
             elif "d" == key:
 
                 if self.current_cr_processor.blur[0] > 1:
-                    self.current_cr_processor.blur -= tuple([x - 2 for x in self.current_cr_processor.blur])
+                    self.current_cr_processor.blur == tuple([x - 2 for x in self.current_cr_processor.blur])
                 # print("Corneal reflex blurring decreased (%s)." % self.CRProcessor.blur)
 
             elif "r" == key:
@@ -352,7 +352,7 @@ class GUI:
 
         self.key_listener(cv2.waitKey(50))
         if self.first_run:
-            cv2.destroyAllWindows()
+            #cv2.destroyAllWindows()
             self.first_run = False
 
 

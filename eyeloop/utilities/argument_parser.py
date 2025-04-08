@@ -22,6 +22,7 @@ class Arguments:
         self.side = None
         self.radius_threshold = None
         self.search_step = None
+        self.auto_search = None
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
@@ -75,8 +76,11 @@ class Arguments:
         parser.add_argument("-thr", "--radius_threshold", default = 5, type=int,
                             help="Radius threshold for pupil fitting")
         
-        parser.add_argument("-srs", "--search_step", default=20, type=int,
+        parser.add_argument("-srs", "--search_step", default=20, type=int,                            
                             help="Step with which the pupil search patterns increases")
+        
+        parser.add_argument("-as", "--auto_search", default=1, type=int,
+                            help="Automatic search for pupil (yes/no, 1/0) - default = 1")
         
         return parser.parse_args(args)
 
@@ -104,6 +108,7 @@ class Arguments:
         self.side = parsed_args.side
         self.radius_threshold = parsed_args.radius_threshold
         self.search_step = parsed_args.search_step
+        self.auto_search = parsed_args.auto_search
         #self.blink = parsed_args.blink
 
     def parse_config(self, config: str) -> None:
@@ -158,6 +163,9 @@ class Arguments:
                     self.radius_threshold = parameter
                 elif parameter == "search_step":
                     print("search step: ", parameter)
-                    self.radiussearch_step_threshold = parameter
+                    self.search_step = parameter
+                elif parameter == "auto_search":
+                    print("auto_search: ", parameter)
+                    self.auto_search = parameter
 
             print("")

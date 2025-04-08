@@ -81,7 +81,7 @@ class Importer(IMPORTER):
         image = self.resize(image)
         self.rotate_(image, config.engine.angle)
         config.engine.iterate(image)
-        self.save_(image)
+        #self.save_(image)
         self.frame += 1
 
     def route_sequence_sing(self) -> None:

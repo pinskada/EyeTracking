@@ -368,7 +368,7 @@ class GUI:
                 self.cursor = self.centre
         else:
 
-            if self.locked == False:
+            if self.locked == False and config.arguments.auto_search == True:
 
                 self.pupil_lock()
 
@@ -396,7 +396,8 @@ class GUI:
 
         try:
             # If sucessful, tracking is initiated
-            if self.pupil_processor.fit_model.params[1] > config.arguments.radius_threshold:
+            print(str(self.pupil_processor.fit_model.params[1]))
+            if self.pupil_processor.fit_model.params[1] > config.arguments.min_radius_threshold and self.pupil_processor.fit_model.params[1] < config.arguments.max_radius_threshold:
                 
                 param_dict = {
                     "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
@@ -425,7 +426,7 @@ class GUI:
                 config.engine.activate()
                 return
             else:
-                # If not sucessful cursor adjustment is made
+                # If not sucessful, cursor adjustment is made
                 self.center_offset_generator()
                 pass
         except:

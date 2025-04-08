@@ -20,9 +20,11 @@ class Arguments:
         self.tracking = None
         self.model = None
         self.side = None
-        self.radius_threshold = None
+        self.min_radius_threshold = None
+        self.max_radius_threshold = None
         self.search_step = None
         self.auto_search = None
+    
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
@@ -73,8 +75,11 @@ class Arguments:
         parser.add_argument("-s", "--side", default="B", type=str,
                             help="Chooses what side of the image to work with")
         
-        parser.add_argument("-thr", "--radius_threshold", default = 5, type=int,
-                            help="Radius threshold for pupil fitting")
+        parser.add_argument("-thr", "--min_radius_threshold", default = 5, type=int,
+                            help="Minimal radius threshold for pupil fitting")
+        
+        parser.add_argument("-mthr", "--max_radius_threshold", default = 20, type=int,
+                            help="Maximum radius threshold for pupil fitting")
         
         parser.add_argument("-srs", "--search_step", default=20, type=int,                            
                             help="Step with which the pupil search patterns increases")
@@ -106,9 +111,11 @@ class Arguments:
         self.params = parsed_args.params
         self.blinkcalibration = parsed_args.blink
         self.side = parsed_args.side
-        self.radius_threshold = parsed_args.radius_threshold
+        self.min_radius_threshold = parsed_args.min_radius_threshold
+        self.max_radius_threshold = parsed_args.max_radius_threshold
         self.search_step = parsed_args.search_step
         self.auto_search = parsed_args.auto_search
+        
         #self.blink = parsed_args.blink
 
     def parse_config(self, config: str) -> None:
@@ -158,14 +165,18 @@ class Arguments:
                 elif parameter == "side":
                     print("working with side: ", parameter)
                     self.side = parameter
-                elif parameter == "radius_threshold":
-                    print("pupil radius threshold: ", parameter)
-                    self.radius_threshold = parameter
+                elif parameter == "min_radius_threshold":
+                    print("minimal pupil radius threshold: ", parameter)
+                    self.min_radius_threshold = parameter
+                elif parameter == "max_radius_threshold":
+                    print("maximum radius threshold: ", parameter)
+                    self.max_radius_threshold = parameter
                 elif parameter == "search_step":
                     print("search step: ", parameter)
                     self.search_step = parameter
                 elif parameter == "auto_search":
                     print("auto_search: ", parameter)
                     self.auto_search = parameter
+                
 
             print("")

@@ -64,11 +64,14 @@ class GUI:
         cv2.setMouseCallback("Tool tip", lambda *args: None)
 
     def update_tool_tip(self, index: int, error: bool = False) -> None:
+        """
         if error:
             cv2.imshow("Tool tip", self.tool_tips[index + 4])
         else:
             cv2.imshow("Tool tip", self.tool_tips[index - 1])
-            
+        """
+        pass
+
     def key_listener(self, key: int) -> None:
         try:
             key = chr(key)
@@ -251,13 +254,13 @@ class GUI:
         cv2.putText(self.crstock_txt, 'CR | W/S | E/D || bin/blur', (10, 15), font, .7, 1, 0, cv2.LINE_4)
         cv2.putText(self.crstock_txt_selected, '(*) CR | W/S | E/D || bin/blur', (10, 15), font, .7, 1, 0, cv2.LINE_4)
 
-        cv2.imshow("CONFIGURATION", np.hstack((self.bin_stock, self.bin_stock)))
-        cv2.imshow("BINARY", np.vstack((self.bin_stock, self.bin_stock)))
+        #cv2.imshow("CONFIGURATION", np.hstack((self.bin_stock, self.bin_stock)))
+        #cv2.imshow("BINARY", np.vstack((self.bin_stock, self.bin_stock)))
 
         cv2.moveWindow("BINARY", 105 + width * 2, 100)
         cv2.moveWindow("CONFIGURATION", 100, 100)
 
-        cv2.imshow("Tool tip", self.first_tool_tip)
+        #cv2.imshow("Tool tip", self.first_tool_tip)
 
         cv2.moveWindow("Tool tip", 100, 1000 + height + 100)
         
@@ -276,7 +279,7 @@ class GUI:
 
 
     def update_record(self, frame_preview) -> None:
-        cv2.imshow("Recording", frame_preview)
+        #cv2.imshow("Recording", frame_preview)
         if cv2.waitKey(1) == ord('q'):
             config.engine.release()
 
@@ -356,8 +359,8 @@ class GUI:
             self.bin_CR[0:20, 0:self.binary_width] = self.crstock_txt
             pass
 
-        cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
-        cv2.imshow("CONFIGURATION", source_rgb)
+        #cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
+        #cv2.imshow("CONFIGURATION", source_rgb)
         self.out.write(source_rgb)
 
         self.key_listener(cv2.waitKey(50))

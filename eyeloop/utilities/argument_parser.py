@@ -24,6 +24,7 @@ class Arguments:
         self.max_radius_threshold = None
         self.search_step = None
         self.auto_search = None
+        self.tracker_fps = None
     
 
         self.parsed_args = self.parse_args(args)
@@ -41,7 +42,7 @@ class Arguments:
         parser.add_argument("-i", "--importer", default="cv", type=str,
                             help="Set import route of stream (cv, vimba, ...)")
         parser.add_argument("-sc", "--scale", default=1, type=float, help="Scale the stream (default: 1; 0-1)")
-        parser.add_argument("-m", "--model", default="ellipsoid", type=str,
+        parser.add_argument("-m", "--model", default="circular", type=str,
                             help="Set pupil model type (circular; ellipsoid = default).")
         parser.add_argument("-ma", "--markers", default=0, type=int,
                             help="Enable/disable artifact removing markers (0: disable/default; 1: enable)")
@@ -87,6 +88,9 @@ class Arguments:
         parser.add_argument("-as", "--auto_search", default=1, type=int,
                             help="Automatic search for pupil (yes/no, 1/0) - default = 1")
         
+        parser.add_argument("-trf", "--tracker_fps", default=1000, type=int,
+                            help="Refresh rate cap for the tracker (default = 1000)")
+        
         return parser.parse_args(args)
 
     def build_config(self, parsed_args):
@@ -115,6 +119,7 @@ class Arguments:
         self.max_radius_threshold = parsed_args.max_radius_threshold
         self.search_step = parsed_args.search_step
         self.auto_search = parsed_args.auto_search
+        self.tracker_fps = parsed_args.tracker_fps
         
         #self.blink = parsed_args.blink
 
@@ -177,6 +182,9 @@ class Arguments:
                 elif parameter == "auto_search":
                     print("auto_search: ", parameter)
                     self.auto_search = parameter
+                elif parameter == "tracker_fps":
+                    print("tracker_fps: ", parameter)
+                    self.tracker_fps = parameter
                 
 
             print("")

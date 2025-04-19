@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 from typing import Optional, Callable
+import time
+
 
 import cv2
 
@@ -75,6 +77,7 @@ class Importer(IMPORTER):
                 self.route_frame()
             else:
                 break
+            time.sleep(1 / config.arguments.tracker_fps)
 
     def proceed(self, image) -> None:
         image = self.crop(image)

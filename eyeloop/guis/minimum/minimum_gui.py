@@ -254,13 +254,13 @@ class GUI:
         cv2.putText(self.crstock_txt, 'CR | W/S | E/D || bin/blur', (10, 15), font, .7, 1, 0, cv2.LINE_4)
         cv2.putText(self.crstock_txt_selected, '(*) CR | W/S | E/D || bin/blur', (10, 15), font, .7, 1, 0, cv2.LINE_4)
 
-        #cv2.imshow("CONFIGURATION", np.hstack((self.bin_stock, self.bin_stock)))
-        #cv2.imshow("BINARY", np.vstack((self.bin_stock, self.bin_stock)))
+        cv2.imshow("CONFIGURATION", np.hstack((self.bin_stock, self.bin_stock)))
+        cv2.imshow("BINARY", np.vstack((self.bin_stock, self.bin_stock)))
 
         cv2.moveWindow("BINARY", 105 + width * 2, 100)
         cv2.moveWindow("CONFIGURATION", 100, 100)
 
-        #cv2.imshow("Tool tip", self.first_tool_tip)
+        cv2.imshow("Tool tip", self.first_tool_tip)
 
         cv2.moveWindow("Tool tip", 100, 1000 + height + 100)
         

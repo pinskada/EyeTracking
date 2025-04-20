@@ -7,10 +7,16 @@ from tkinter import filedialog
 import os
 import numpy as np
 
+eyeloop_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if eyeloop_root not in sys.path:
+    sys.path.insert(0, eyeloop_root)
+from multiprocessing import Queue
+
 import eyeloop.config as config
 from eyeloop.engine.engine import Engine
 from eyeloop.extractors.DAQ import DAQ_extractor
 from eyeloop.extractors.frametimer import FPS_extractor
+from eyeloop.extractors.queue_extractor import QueueExtractor
 
 from eyeloop.utilities.argument_parser import Arguments
 from eyeloop.utilities.file_manager import File_Manager
@@ -30,9 +36,13 @@ class EyeLoop:
     Git: https://github.com/simonarvin/eyeloop
     """
 
-    def __init__(self, args, logger=None):
+    def __init__(self, args, logger=None, command_queue=None, response_queue=None, sync_queue=None):
 
         welcome("Server")
+
+        config.command_queue = Queue()
+        config.response_queue = Queue()
+        config.sync_queue = Queue()
 
         config.arguments = Arguments(args)
         config.file_manager = File_Manager(output_root=config.arguments.output_dir, img_format = config.arguments.img_format)
@@ -64,6 +74,7 @@ class EyeLoop:
 
         fps_counter = FPS_extractor()
         data_acquisition = DAQ_extractor(config.file_manager.new_folderpath)
+        queue_extractor = QueueExtractor()
 
         file_path = config.arguments.extractors
 
@@ -72,7 +83,7 @@ class EyeLoop:
             root.withdraw()
             file_path = filedialog.askopenfilename()
 
-        extractors_add = []
+        extractors_add = [queue_extractor]
 
         if file_path != "":
             try:
@@ -86,8 +97,8 @@ class EyeLoop:
             except Exception as e:
                 logger.info(f"extractors not included, {e}")
 
-        extractors_base = [fps_counter, data_acquisition]
-        extractors = extractors_add + extractors_base
+        #extractors_base = [fps_counter]
+        extractors = extractors_add# + extractors_base
 
         config.engine.load_extractors(extractors)
 
@@ -107,7 +118,7 @@ class EyeLoop:
 
 
 def main():
-    EyeLoop(sys.argv[1:], logger=None)
+    EyeLoop(sys.argv[1:], logger=None, command_queue=None, response_queue=None, sync_queue=None)
 
 
 if __name__ == '__main__':

@@ -25,6 +25,7 @@ class Arguments:
         self.search_step = None
         self.auto_search = None
         self.tracker_fps = None
+        self.sharedmem = None
     
 
         self.parsed_args = self.parse_args(args)
@@ -38,14 +39,20 @@ class Arguments:
 
         parser.add_argument("-o", "--output_dir", default=str(PROJECT_DIR.joinpath("data").absolute()), type=str,
                             help="Specify output destination.")
+        
         parser.add_argument("-c", "--config", default="0", type=str, help="Input a .pupt config file (preset).")
+
         parser.add_argument("-i", "--importer", default="cv", type=str,
                             help="Set import route of stream (cv, vimba, ...)")
+        
         parser.add_argument("-sc", "--scale", default=1, type=float, help="Scale the stream (default: 1; 0-1)")
+
         parser.add_argument("-m", "--model", default="circular", type=str,
                             help="Set pupil model type (circular; ellipsoid = default).")
+        
         parser.add_argument("-ma", "--markers", default=0, type=int,
                             help="Enable/disable artifact removing markers (0: disable/default; 1: enable)")
+        
         parser.add_argument("-tr", "--tracking", default=1, type=int,
                             help="Enable/disable tracking (1/enabled: default).")
 
@@ -91,6 +98,9 @@ class Arguments:
         parser.add_argument("-trf", "--tracker_fps", default=1000, type=int,
                             help="Refresh rate cap for the tracker (default = 1000)")
         
+        parser.add_argument("-shm", "--sharedmem", default="", type=str,
+                            help="Name of the shared memory segment for inter-process communication.")
+        
         return parser.parse_args(args)
 
     def build_config(self, parsed_args):
@@ -120,6 +130,7 @@ class Arguments:
         self.search_step = parsed_args.search_step
         self.auto_search = parsed_args.auto_search
         self.tracker_fps = parsed_args.tracker_fps
+        self.sharedmem = parsed_args.sharedmem
         
         #self.blink = parsed_args.blink
 
@@ -185,6 +196,9 @@ class Arguments:
                 elif parameter == "tracker_fps":
                     print("tracker_fps: ", parameter)
                     self.tracker_fps = parameter
+                elif parameter == "sharedmem":
+                    print("sharedmem: ", parameter)
+                    self.sharedmem = parameter
                 
 
             print("")

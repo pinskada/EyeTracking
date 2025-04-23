@@ -38,11 +38,11 @@ class EyeLoop:
 
     def __init__(self, args, logger=None, command_queue=None, response_queue=None, sync_queue=None):
 
-        welcome("Server")
+        #welcome("Server")
 
-        config.command_queue = Queue()
-        config.response_queue = Queue()
-        config.sync_queue = Queue()
+        config.command_queue = command_queue
+        config.response_queue = response_queue
+        config.sync_queue = sync_queue
 
         config.arguments = Arguments(args)
         config.file_manager = File_Manager(output_root=config.arguments.output_dir, img_format = config.arguments.img_format)

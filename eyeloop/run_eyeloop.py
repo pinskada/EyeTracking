@@ -79,8 +79,8 @@ class EyeLoop:
         config.engine = Engine(self)
 
         #fps_counter = FPS_extractor()
-        data_acquisition = DAQ_extractor(config.file_manager.new_folderpath)
-        #queue_extractor = QueueExtractor()
+        #data_acquisition = DAQ_extractor(config.file_manager.new_folderpath)
+        queue_extractor = QueueExtractor()
 
         file_path = config.arguments.extractors
 
@@ -88,8 +88,6 @@ class EyeLoop:
             root = tk.Tk()
             root.withdraw()
             file_path = filedialog.askopenfilename()
-
-        #extractors_add = [queue_extractor]
 
         if file_path != "":
             try:
@@ -103,7 +101,7 @@ class EyeLoop:
             except Exception as e:
                 logger.info(f"extractors not included, {e}")
 
-        extractors = []
+        extractors = [queue_extractor]
         #extractors = [fps_counter]
         #extractors = extractors_add# + extractors_base
 

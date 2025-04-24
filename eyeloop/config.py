@@ -8,7 +8,7 @@ graphical_user_interface = 0
 command_queue = 0
 response_queue = 0
 sync_queue = 0
-preview = 1
+preview = 0
 
 #blink = 142.08
 import numpy as np

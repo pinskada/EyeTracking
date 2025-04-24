@@ -3,27 +3,35 @@ from eyeloop.utilities.encode_binary_float64_as_png import encode_binary_float64
 
 class QueueExtractor:
     def __init__(self):
-        pass
+        self.response_queue = config.response_queue
+        self.sync_queue = config.sync_queue
 
     def activate(self):
-        return
+        print("[Extractor] QueueExtractor activated.")
     
     def fetch(self, core):
-       
-        if config.show_bin:
+        try:
+            self.sync_queue.put({"type": "ack", "frame_id": config.importer.frame_id})
+        except ValueError as e:
+            print(f"[ERROR] Error writing to sync queue: {e}")
+
+        if config.preview:
             try:
                 png_image = encode_binary_float64_as_png(config.graphical_user_interface.bin_P)
 
                 config.response_queue.put({"bin_image": png_image})
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"[ERROR] QueueExtractor.fetch() ValueError: {e}")
+   
+        try:
+            config.response_queue.put({core.dataout})
+        except ValueError as e:
+            print(f"[ERROR] QueueExtractor.fetch() error: {e}")
 
-        else:
-            try:
+    def __name__(self):
+        return "QueueExtractor"
 
-                config.response_queue.put({core.dataout})
-            except ValueError:
-                pass
-
-    def release(self, core):
+    def release(self):
+        print("[Extractor] QueueExtractor released called, passing.")
         pass
+    

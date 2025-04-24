@@ -9,8 +9,9 @@ def encode_binary_float64_as_png(binary_image: np.ndarray) -> bytes:
         raise ValueError("Expected float64 image")
 
     # Step 1: Scale 0.0/1.0 to 0/255
-    scaled = (binary_image * 255).astype(np.uint8)
-
+    scaled = (np.clip(binary_image, 0, 1) * 255).astype(np.uint8)
+    scaled = np.squeeze(scaled)
+    
     # Step 2: Encode as PNG
     success, encoded = cv2.imencode(".png", scaled)
     if not success:

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Importer(IMPORTER):
-
+ 
     def __init__(self) -> None:
         super().__init__()
         self.route_frame: Optional[Callable] = None  # Dynamically assigned at runtime depending on input type

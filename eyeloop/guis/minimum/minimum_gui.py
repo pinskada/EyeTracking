@@ -450,7 +450,7 @@ class GUI:
 
         # Square value computation---------------------------------------------
         
-        step = config.arguments.search_step
+        step = config.arguments.search_step # Step size for the search
 
         if self.cycle == 1:                             # Initial position
             self.dx = - step * self.circle_size

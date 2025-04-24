@@ -22,6 +22,8 @@ from eyeloop.utilities.argument_parser import Arguments
 from eyeloop.utilities.file_manager import File_Manager
 from eyeloop.utilities.format_print import welcome
 from eyeloop.utilities.shared_logging import setup_logging
+from multiprocessing.shared_memory import SharedMemory
+from multiprocessing import Process, Queue
 
 EYELOOP_DIR = Path(__file__).parent
 PROJECT_DIR = EYELOOP_DIR.parent
@@ -39,10 +41,14 @@ class EyeLoop:
     def __init__(self, args, logger=None, command_queue=None, response_queue=None, sync_queue=None):
 
         #welcome("Server")
-
-        config.command_queue = command_queue
-        config.response_queue = response_queue
-        config.sync_queue = sync_queue
+        if command_queue is None or response_queue is None or sync_queue is None:
+            config.command_queue = Queue()
+            config.response_queue = Queue()
+            config.sync_queue = Queue()
+        else:
+            config.command_queue = command_queue
+            config.response_queue = response_queue
+            config.sync_queue = sync_queue
 
         config.arguments = Arguments(args)
         config.file_manager = File_Manager(output_root=config.arguments.output_dir, img_format = config.arguments.img_format)
@@ -72,9 +78,9 @@ class EyeLoop:
 
         config.engine = Engine(self)
 
-        fps_counter = FPS_extractor()
+        #fps_counter = FPS_extractor()
         data_acquisition = DAQ_extractor(config.file_manager.new_folderpath)
-        queue_extractor = QueueExtractor()
+        #queue_extractor = QueueExtractor()
 
         file_path = config.arguments.extractors
 
@@ -83,7 +89,7 @@ class EyeLoop:
             root.withdraw()
             file_path = filedialog.askopenfilename()
 
-        extractors_add = [queue_extractor]
+        #extractors_add = [queue_extractor]
 
         if file_path != "":
             try:
@@ -97,8 +103,9 @@ class EyeLoop:
             except Exception as e:
                 logger.info(f"extractors not included, {e}")
 
-        #extractors_base = [fps_counter]
-        extractors = extractors_add# + extractors_base
+        extractors = []
+        #extractors = [fps_counter]
+        #extractors = extractors_add# + extractors_base
 
         config.engine.load_extractors(extractors)
 

@@ -7,6 +7,14 @@ from tkinter import filedialog
 import os
 import numpy as np
 
+"""
+current_file = os.path.abspath(__file__)
+repo_root = os.path.abspath(os.path.join(current_file, "..", "..", "..", ".."))
+
+if repo_root not in sys.path:
+    print(f"[DEBUG] Adding repo root to sys.path: {repo_root}")
+    sys.path.insert(0, repo_root)
+"""
 eyeloop_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if eyeloop_root not in sys.path:
     sys.path.insert(0, eyeloop_root)
@@ -80,6 +88,9 @@ class EyeLoop:
 
         #fps_counter = FPS_extractor()
         #data_acquisition = DAQ_extractor(config.file_manager.new_folderpath)
+        
+        #extractors_base = [data_acquisition, fps_counter]
+
         queue_extractor = QueueExtractor()
 
         file_path = config.arguments.extractors
@@ -101,9 +112,10 @@ class EyeLoop:
             except Exception as e:
                 logger.info(f"extractors not included, {e}")
 
-        extractors = [queue_extractor]
-        #extractors = [fps_counter]
+        #extractors_add = [queue_extractor]
+        
         #extractors = extractors_add# + extractors_base
+        extractors = queue_extractor
 
         config.engine.load_extractors(extractors)
 

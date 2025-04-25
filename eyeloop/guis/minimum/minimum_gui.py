@@ -57,11 +57,13 @@ class GUI:
 
     def release(self):
         #self.out.release()
-        cv2.destroyAllWindows()
+        #cv2.destroyAllWindows()
+        pass
 
     def remove_mousecallback(self) -> None:
-        cv2.setMouseCallback("CONFIGURATION", lambda *args: None)
-        cv2.setMouseCallback("Tool tip", lambda *args: None)
+        #cv2.setMouseCallback("CONFIGURATION", lambda *args: None)
+        #cv2.setMouseCallback("Tool tip", lambda *args: None)
+        pass
 
     def update_tool_tip(self, index: int, error: bool = False) -> None:
         """
@@ -82,12 +84,12 @@ class GUI:
             if "y" == key:
                 print("Initiating tracking..")
                 self.remove_mousecallback()
-                cv2.destroyWindow("CONFIGURATION")
-                cv2.destroyWindow("BINARY")
-                cv2.destroyWindow("Tool tip")
+                #cv2.destroyWindow("CONFIGURATION")
+                #cv2.destroyWindow("BINARY")
+                #cv2.destroyWindow("Tool tip")
 
-                cv2.imshow("TRACKING", self.bin_stock)
-                cv2.moveWindow("TRACKING", 100, 100)
+                #cv2.imshow("TRACKING", self.bin_stock)
+                #cv2.moveWindow("TRACKING", 100, 100)
 
                 self._state = "tracking"
                 self.inquiry = "none"
@@ -254,21 +256,21 @@ class GUI:
         cv2.putText(self.crstock_txt, 'CR | W/S | E/D || bin/blur', (10, 15), font, .7, 1, 0, cv2.LINE_4)
         cv2.putText(self.crstock_txt_selected, '(*) CR | W/S | E/D || bin/blur', (10, 15), font, .7, 1, 0, cv2.LINE_4)
 
-        cv2.imshow("CONFIGURATION", np.hstack((self.bin_stock, self.bin_stock)))
-        cv2.imshow("BINARY", np.vstack((self.bin_stock, self.bin_stock)))
+        #cv2.imshow("CONFIGURATION", np.hstack((self.bin_stock, self.bin_stock)))
+        #cv2.imshow("BINARY", np.vstack((self.bin_stock, self.bin_stock)))
 
-        cv2.moveWindow("BINARY", 105 + width * 2, 100)
-        cv2.moveWindow("CONFIGURATION", 100, 100)
+        #cv2.moveWindow("BINARY", 105 + width * 2, 100)
+        #cv2.moveWindow("CONFIGURATION", 100, 100)
 
-        cv2.imshow("Tool tip", self.first_tool_tip)
+        #cv2.imshow("Tool tip", self.first_tool_tip)
 
-        cv2.moveWindow("Tool tip", 100, 1000 + height + 100)
+        #cv2.moveWindow("Tool tip", 100, 1000 + height + 100)
         
-        try:
-            cv2.setMouseCallback("CONFIGURATION", self.mousecallback)
-            cv2.setMouseCallback("Tool tip", self.tip_mousecallback)
-        except:
-            print("Could not bind mouse-buttons.")
+        #try:
+        #    cv2.setMouseCallback("CONFIGURATION", self.mousecallback)
+        #    cv2.setMouseCallback("Tool tip", self.tip_mousecallback)
+        #except:
+        #    print("Could not bind mouse-buttons.")
 
     def place_cross(self, source: np.ndarray, point: tuple, color: tuple) -> None:
         try:
@@ -381,7 +383,7 @@ class GUI:
         self.cr1_(source_rgb)
         self.cr2_(source_rgb)
 
-        cv2.imshow("TRACKING", source_rgb)
+        #cv2.imshow("TRACKING", source_rgb)
 
         threading.Timer(self.fps, self.skip_track).start() #run feed every n secs (n=1)
         self.update = lambda _: None
@@ -415,12 +417,12 @@ class GUI:
 
                 print("Initiating tracking..")
                 self.remove_mousecallback()
-                cv2.destroyWindow("CONFIGURATION")
-                cv2.destroyWindow("BINARY")
-                cv2.destroyWindow("Tool tip")
+                #cv2.destroyWindow("CONFIGURATION")
+                #cv2.destroyWindow("BINARY")
+                #cv2.destroyWindow("Tool tip")
 
-                cv2.imshow("TRACKING", self.bin_stock)
-                cv2.moveWindow("TRACKING", 100, 100)
+                #cv2.imshow("TRACKING", self.bin_stock)
+                #cv2.moveWindow("TRACKING", 100, 100)
 
                 self._state = "tracking"
 

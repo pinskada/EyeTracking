@@ -3,6 +3,8 @@ from eyeloop.utilities.encode_binary_float64_as_png import encode_binary_float64
 
 class QueueExtractor:
     def __init__(self):
+        self.fetch = lambda _: None
+        self.activate = lambda: None
         self.response_queue = config.response_queue
         self.sync_queue = config.sync_queue
 
@@ -11,7 +13,7 @@ class QueueExtractor:
     
     def fetch(self, core):
         try:
-            self.sync_queue.put({"type": "ack", "frame_id": config.importer.frame_id})
+            self.sync_queue.put({"type": "ack", "frame_id": config.importer.current_frame_id})
         except ValueError as e:
             print(f"[ERROR] Error writing to sync queue: {e}")
 

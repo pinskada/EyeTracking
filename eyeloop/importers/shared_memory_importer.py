@@ -11,7 +11,7 @@ class Importer(IMPORTER):
         self.scale = config.arguments.scale
 
         # Wait for init command via command_queue
-        self.shared_memory_name = config.arguments.shared_memory_name
+        self.shared_memory_name = config.arguments.sharedmem
         self.side = config.arguments.side
         self.frame_shape = None
         self.frame_dtype = None
@@ -56,7 +56,7 @@ class Importer(IMPORTER):
             image=frame
         )   
 
-    def _route(self):
+    def route(self):
         self.first_frame()
         while True:
             self.load_command_queue()

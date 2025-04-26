@@ -8,7 +8,7 @@ from eyeloop.utilities.general_operations import to_int, tuple_int
 import time
 import logging
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 class Center_class():
     def fit(self, r):
@@ -169,11 +169,11 @@ class Shape():
             config.engine.dataout[self.type_entry] = self.fit_model.params#params
         except IndexError:
 
-            logger.info(f"fit index error")
+            print(f"fit index error")
             self.center_adj()
         except Exception as e:
 
-            logger.info(f"fit-func error: {e}")
+            print(f"fit-func error: {e}")
             self.center_adj()
 
 

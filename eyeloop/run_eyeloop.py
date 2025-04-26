@@ -46,17 +46,20 @@ class EyeLoop:
     Git: https://github.com/simonarvin/eyeloop
     """
 
-    def __init__(self, args, logger=None, command_queue=None, response_queue=None, sync_queue=None):
+    def __init__(self, args, logger=None, command_queue=None, response_queue=None, sync_queue=None, acknowledge_queue=None):
 
         #welcome("Server")
-        if command_queue is None or response_queue is None or sync_queue is None:
+        if command_queue is None or response_queue is None or sync_queue is None or acknowledge_queue is None:
             config.command_queue = Queue()
             config.response_queue = Queue()
             config.sync_queue = Queue()
+            config.acknowledge_queue = Queue()
+            print("(!) No queues provided. Creating empty Queues.")
         else:
             config.command_queue = command_queue
             config.response_queue = response_queue
             config.sync_queue = sync_queue
+            config.acknowledge_queue = acknowledge_queue
 
         config.arguments = Arguments(args)
         config.file_manager = File_Manager(output_root=config.arguments.output_dir, img_format = config.arguments.img_format)
@@ -88,10 +91,6 @@ class EyeLoop:
 
         #fps_counter = FPS_extractor()
         #data_acquisition = DAQ_extractor(config.file_manager.new_folderpath)
-        
-        #extractors_base = [data_acquisition, fps_counter]
-
-        queue_extractor = QueueExtractor()
 
         file_path = config.arguments.extractors
 
@@ -100,22 +99,22 @@ class EyeLoop:
             root.withdraw()
             file_path = filedialog.askopenfilename()
 
+        #extractors_add = []
+
         if file_path != "":
             try:
-                logger.info(f"including {file_path}")
+                #logger.info(f"including {file_path}")
                 sys.path.append(os.path.dirname(file_path))
                 module_import = os.path.basename(file_path).split(".")[0]
 
-                extractor_module = importlib.import_module(module_import)
+                extractor_module = importlib.import_module(f"eyeloop.extractors.{module_import}")
                 extractors_add = extractor_module.extractors_add
 
             except Exception as e:
-                logger.info(f"extractors not included, {e}")
+                print(f"extractors not included, {e}")
 
-        #extractors_add = [queue_extractor]
-        
-        #extractors = extractors_add# + extractors_base
-        extractors = queue_extractor
+        #extractors_base = [fps_counter, data_acquisition]
+        extractors = [QueueExtractor()]
 
         config.engine.load_extractors(extractors)
 
@@ -123,7 +122,7 @@ class EyeLoop:
 
     def run_importer(self):
         try:
-            logger.info(f"Initiating tracking via Importer: {config.arguments.importer}")
+            #logger.info(f"Initiating tracking via Importer: {config.arguments.importer}")
             importer_module = importlib.import_module(f"eyeloop.importers.{config.arguments.importer}")
             config.importer = importer_module.Importer()
             config.importer.route()
@@ -131,11 +130,11 @@ class EyeLoop:
             # exec(import_command, globals())
 
         except ImportError:
-            logger.exception("Invalid importer selected")
+            print("Invalid importer selected")
 
 
 def main():
-    EyeLoop(sys.argv[1:], logger=None, command_queue=None, response_queue=None, sync_queue=None)
+    EyeLoop(sys.argv[1:], logger=None, command_queue=None, response_queue=None, sync_queue=None, acknowledge_queue=None)
 
 
 if __name__ == '__main__':

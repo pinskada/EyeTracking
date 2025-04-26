@@ -9,7 +9,7 @@ from eyeloop.utilities.general_operations import to_int, tuple_int
 import threading
 
 import logging
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 class GUI:
     def __init__(self) -> None:
@@ -123,7 +123,7 @@ class GUI:
                     print("Pupil selected.\nAdjust binarization via R/F (threshold) and T/G (smoothing).")
                 except Exception as e:
                     self.update_tool_tip(3, True)
-                    logger.info(f"pupil selection failed; {e}")
+                    print(f"pupil selection failed; {e}")
 
             elif "2" == key:
                 try:
@@ -139,7 +139,7 @@ class GUI:
 
                 except Exception as e:
                     self.update_tool_tip(1, True)
-                    logger.info(f"CR selection failed; {e}")
+                    print(f"CR selection failed; {e}")
 
             elif "3" == key:
                 try:
@@ -213,7 +213,7 @@ class GUI:
             "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
             }
 
-        logger.info(f"loaded parameters:\n{param_dict}")
+        #print(f"loaded parameters:\n{param_dict}")
 
     def arm(self, width: int, height: int) -> None:
         self.fps = np.round(1/config.arguments.fps, 2)
@@ -229,9 +229,9 @@ class GUI:
         self.binary_width = max(width, 300)
         self.binary_height = max(height, 200)
 
-        fourcc = cv2.VideoWriter_fourcc(*'MPEG')
-        output_vid = Path(config.file_manager.new_folderpath, "output.avi")
-        self.out = cv2.VideoWriter(str(output_vid), fourcc, 50.0, (self.width, self.height))
+        #fourcc = cv2.VideoWriter_fourcc(*'MPEG')
+        #output_vid = Path(config.file_manager.new_folderpath, "output.avi")
+        #self.out = cv2.VideoWriter(str(output_vid), fourcc, 50.0, (self.width, self.height))
 
         self.bin_stock = np.zeros((self.binary_height, self.binary_width))
         self.bin_P = self.bin_stock.copy()
@@ -297,7 +297,7 @@ class GUI:
             self.place_cross(source_rgb, pupil_center, red)
             return True
         except Exception as e:
-            #logger.info(f"pupil not found: {e}")
+            #print(f"pupil not found: {e}")
             return False
 
     def cr_1(self, source_rgb):
@@ -308,7 +308,7 @@ class GUI:
             self.place_cross(source_rgb, self.cr_processor_1.center, green)
             return True
         except Exception as e:
-            logger.info(f"cr1 func: {e}")
+            print(f"cr1 func: {e}")
             return False
 
     def cr_2(self, source_rgb):
@@ -319,7 +319,7 @@ class GUI:
             self.place_cross(source_rgb, self.cr_processor_2.center, green)
             return True
         except Exception as e:
-            logger.info(f"cr2 func: {e}")
+            print(f"cr2 func: {e}")
             return False
 
     def adj_update(self, img):
@@ -363,7 +363,7 @@ class GUI:
 
         #cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
         #cv2.imshow("CONFIGURATION", source_rgb)
-        self.out.write(source_rgb)
+        #self.out.write(source_rgb)
 
         self.key_listener(cv2.waitKey(50))
         if self.first_run:
@@ -388,10 +388,10 @@ class GUI:
         threading.Timer(self.fps, self.skip_track).start() #run feed every n secs (n=1)
         self.update = lambda _: None
 
-        if cv2.waitKey(1) == ord("q"):
+        #if cv2.waitKey(1) == ord("q"):
 
 
-            config.engine.release()
+            #config.engine.release()
 
     def pupil_lock(self):
         """
@@ -410,7 +410,7 @@ class GUI:
                     "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
                     }
 
-                logger.info(f"loaded parameters:\n{param_dict}")
+                #print(f"loaded parameters:\n{param_dict}")
 
                 self.locked = True
                 self.inquiry = "track"

@@ -42,7 +42,7 @@ class Engine:
     def load_extractors(self, extractors: list = None) -> None:
         if extractors is None:
             extractors = []
-        logger.info(f"loading extractors: {extractors}")
+        #logger.info(f"loading extractors: {extractors}")
         self.extractors = extractors
 
 
@@ -87,7 +87,7 @@ class Engine:
         if config.arguments.blinkcalibration != "":
             config.blink = np.load(config.arguments.blinkcalibration)
             self.blink_sampled = lambda _:None
-            logger.info("(success) blink calibration loaded")
+            #logger.info("(success) blink calibration loaded")
 
         if config.arguments.clear == False or config.arguments.params != "":
 
@@ -116,8 +116,8 @@ class Engine:
                 "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
                 }
 
-                logger.info(f"loaded parameters:\n{param_dict}")
-
+                #logger.info(f"loaded parameters:\n{param_dict}")
+                pass
                 return
 
             except:
@@ -134,7 +134,7 @@ class Engine:
         "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
         }
 
-        logger.info(f"loaded parameters:\n{param_dict}")
+        #logger.info(f"loaded parameters:\n{param_dict}")
 
 
     def blink_sampled(self, t:int = 1):
@@ -147,6 +147,7 @@ class Engine:
             path = f"{config.file_manager.new_folderpath}/blinkcalibration_{self.dataout['time']}.npy"
             np.save(path, config.blink)
             print("blink calibration file saved")
+            pass
 
     def track(self, img) -> None:
         """
@@ -177,7 +178,7 @@ class Engine:
 
             self.dataout["blink"] = 1
             self.pupil_processor.fit_model.params = None
-            logger.info("Blink detected.")
+            #logger.info("Blink detected.")
         else:
 
             self.pupil_processor.track(img)
@@ -189,7 +190,7 @@ class Engine:
         try:
             config.graphical_user_interface.update(img)
         except Exception as e:
-            logger.exception("Did you assign the graphical user interface (GUI) correctly? Attempting to release()")
+            print("Did you assign the graphical user interface (GUI) correctly? Attempting to release()")
             self.release()
             return
 
@@ -205,7 +206,7 @@ class Engine:
             try:
                 extractor.activate()
             except AttributeError:
-                logger.warning(f"Extractor {extractor} has no activate() method")
+                print(f"Extractor {extractor} has no activate() method")
 
     def release(self) -> None:
         """
@@ -222,9 +223,9 @@ class Engine:
         "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
         }
 
-        path = f"{config.file_manager.new_folderpath}/params_{self.dataout['time']}.npy"
-        np.save(path, param_dict)
-        print("Parameters saved")
+        #path = f"{config.file_manager.new_folderpath}/params_{self.dataout['time']}.npy"
+        #np.save(path, param_dict)
+        #print("Parameters saved")
 
         self.live = False
         config.graphical_user_interface.release()
@@ -234,7 +235,7 @@ class Engine:
             try:
                 extractor.release(self)
             except AttributeError:
-                logger.warning(f"Extractor {extractor} has no release() method")
+                print(f"Extractor {extractor} has no release() method")
             else:
                 pass
 

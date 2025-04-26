@@ -401,7 +401,6 @@ class GUI:
 
         try:
             # If sucessful, tracking is initiated
-            print(str(self.pupil_processor.fit_model.params[1]))
             if self.pupil_processor.fit_model.params[1] > config.arguments.min_radius_threshold and self.pupil_processor.fit_model.params[1] < config.arguments.max_radius_threshold:
                 
                 param_dict = {

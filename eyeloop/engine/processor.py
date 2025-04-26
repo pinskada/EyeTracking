@@ -33,7 +33,7 @@ class Shape():
         self.type_entry = None
         self.track = lambda x:None
 
-
+        self.side = config.arguments.side
 
         if type == 1:
             self.artefact = lambda _:None
@@ -169,11 +169,11 @@ class Shape():
             config.engine.dataout[self.type_entry] = self.fit_model.params#params
         except IndexError:
 
-            print(f"fit index error")
+            print(f"[WARN] [Processor {self.side}]: Fit index error")
             self.center_adj()
         except Exception as e:
 
-            print(f"fit-func error: {e}")
+            print(f"[WARN] [Processor {self.side}]: Fit-func error: {e}")
             self.center_adj()
 
 
@@ -287,7 +287,7 @@ class Shape():
 
 
             if np.sum(crop_list) < self.threshold:
-                raise IndexError("Lost track, do reset")
+                raise IndexError(f"[WARN] [Processor {self.side}]: Lost track, do reset")
 
         #simple:
 

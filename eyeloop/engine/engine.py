@@ -144,7 +144,7 @@ class Engine:
                 print(f"calibrating blink detector {round(config.blink_i/config.blink.shape[0]*100,1)}%")
         else:
             logger.info("(success) blink detection calibrated")
-            path = f"{config.file_manager.new_folderpath}/blinkcalibration_{self.dataout['time']}.npy"
+            path = f"{config.file_manager.new_folderpath}/blinkcalibration_.npy"
             np.save(path, config.blink)
             print("blink calibration file saved")
             pass
@@ -171,12 +171,12 @@ class Engine:
             config.blink_i = 0
 
         self.dataout = {
-            "time": time.time()
+            #"time": time.time()
         }
 
         if np.abs(mean_img - np.mean(config.blink[np.nonzero(config.blink)])) > 10:
 
-            self.dataout["blink"] = 1
+            #self.dataout["blink"] = 1
             self.pupil_processor.fit_model.params = None
             #logger.info("Blink detected.")
         else:

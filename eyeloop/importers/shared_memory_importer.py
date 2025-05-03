@@ -39,7 +39,7 @@ class Importer():
 
     def route(self):
         self.first_frame()
-        time.sleep(1)  # Wait for the engine to stabilize
+        time.sleep(0.3)  # Wait for the engine to stabilize
         print(f"[INFO] Importer {self.side}: Starting routing thread...\n")
         self.proceed_thread = threading.Thread(target=self.proceed())
         self.proceed_thread.run() # Start the frame provider
@@ -53,12 +53,11 @@ class Importer():
                     self.load_command_queue()
                     time.sleep(0.001)
 
-            if self.current_frame_id % 10 == 0 and self.print_status:
+            if self.current_frame_id % 50 == 0 and self.print_status:
                 print(f"[INFO] Importer {self.side}: Current frame ID: {self.current_frame_id}\n")
-
+        
             try:
                 msg = self.sync_queue.get(timeout=1)
-                #print(f"[INFO] Importer {self.side}: Received message: {msg}\n")
                 if msg.get("type") == 'frame_id':
                     self.print_status = True
                     self.current_frame_id = msg.get('frame_id')
@@ -154,5 +153,5 @@ class Importer():
     def release(self) -> None:
         print(f"[INFO] Importer {self.side}: cv.Importer.release() called")
         self.close_memory()
-        cv2.destroyAllWindows()
+        #cv2.destroyAllWindows()
      

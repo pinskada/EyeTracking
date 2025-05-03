@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 import numpy as np
-
+import cv2
 import eyeloop.config as config
 from eyeloop.constants.minimum_gui_constants import *
 from eyeloop.utilities.general_operations import to_int, tuple_int

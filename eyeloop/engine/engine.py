@@ -4,7 +4,6 @@ from typing import Optional
 from os.path import dirname, abspath
 import glob, os
 
-import cv2
 
 import eyeloop.config as config
 from eyeloop.constants.engine_constants import *

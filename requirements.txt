@@ -1,5 +1,0 @@
-smbus2
-opencv-contrib-python==4.4.*
-pymba==0.3.*
-numpy==1.19.*
-PyYaml

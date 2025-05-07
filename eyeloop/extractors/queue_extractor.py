@@ -17,7 +17,7 @@ class QueueExtractor:
                 try:
                     png_image = encode_binary_float64_as_png(config.graphical_user_interface.bin_P)
 
-                    config.response_queue.put({"bin_image": png_image})
+                    config.response_queue.put(png_image)
                 except ValueError as e:
                     print(f"[ERROR] Extractor {self.side}: QueueExtractor.fetch() ValueError: {e}")
             
@@ -27,7 +27,8 @@ class QueueExtractor:
                     "frame_id": config.importer.current_frame_id,
                     "data": core.dataout
                 }
-                #print(f"[INFO] Extractor {self.side}: Sending response with frame ID: {config.importer.current_frame_id}")
+                print(f"[INFO] Extractor {self.side}: Sending response with frame ID: {config.importer.current_frame_id}")
+                print(core.dataout)
                 config.response_queue.put(message)
             except ValueError as e:
                 print(f"[ERROR] Extractor {self.side}: QueueExtractor.fetch() error: {e}")

@@ -98,9 +98,6 @@ class Importer():
                 self.release()
             elif msg.get("type") == "config":
                 self.configure(msg)
-            elif msg.get("type") == "preview":
-                config.preview = msg.get("value")
-                print(f"[INFO] Importer {self.side}: Preview set to {msg.get('value')}")
             else:
                 print(f"[INFO] Importer {self.side}: Unknown command: {msg.get('type')}")
         except Exception:
@@ -132,7 +129,9 @@ class Importer():
         elif msg.get("param") == "step":
             config.arguments.search_step = msg.get("value")
             print(f"[INFO] Importer {self.side}: search step set to {msg.get('value')}")
-
+        elif msg.get("param") == "preview":
+                config.preview = msg.get("value")
+                print(f"[INFO] Importer {self.side}: Preview set to {msg.get('value')}")
         else:
             print(f"[INFO] Importer {self.side}: Unknown configuration parameter: {msg.get('param')}")
   

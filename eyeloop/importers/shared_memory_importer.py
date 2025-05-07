@@ -89,6 +89,7 @@ class Importer():
     def load_command_queue(self):
         try:
             msg = self.command_queue.get_nowait()
+
             if msg.get("type") == "memory":
                 self._setup_shared_memory(msg)
             elif msg.get("type") == "detach":
@@ -106,35 +107,47 @@ class Importer():
     def configure(self, msg):
         """ Configure the run-time parameters based on the received message."""
 
-        if  msg.get("param") == "threshold":
-            config.graphical_user_interface.binary_threshold = msg.get("value")
-            print(f"[INFO] Importer {self.side}: thresholsd set to {msg.get('value')}")
+        try:
+            if  msg.get("param") == "threshold_down":
+                config.graphical_user_interface.pupil_processor.binarythreshold += 1
+                print(f"[INFO] Importer {self.side}: Thresholsd increased to {config.graphical_user_interface.pupil_processor.binarythreshold}.")
 
-        elif msg.get("param") == "blur":
-            config.graphical_user_interface.blur = msg.get("value")
-            print(f"[INFO] Importer {self.side}: blur set to {msg.get('value')}")
+            elif  msg.get("param") == "threshold_up":
+                config.graphical_user_interface.pupil_processor.binarythreshold -= 1
+                print(f"[INFO] Importer {self.side}: Thresholsd decreased to {config.graphical_user_interface.pupil_processor.binarythreshold}.")
 
-        elif msg.get("param") == "auto_search":
-            config.arguments.auto_search = msg.get("value")
-            print(f"[INFO] Importer {self.side}: auto_search set to {msg.get('value')}")
+            elif msg.get("param") == "blur_down":
+                blur = config.graphical_user_interface.pupil_processor.blur
+                config.graphical_user_interface.pupil_processor.blur = tuple(x-1 for x in blur)
+                print(f"[INFO] Importer {self.side}: Blur increased to {config.graphical_user_interface.pupil_processor.blur}.")
 
-        elif msg.get("param") == "minR":
-            config.graphical_user_interface.min_radius_threshold.min_radius = msg.get("value")
-            print(f"[INFO] Importer {self.side}: minR set to {msg.get('value')}")
+            elif msg.get("param") == "blur_up":
+                blur = config.graphical_user_interface.pupil_processor.blur
+                config.graphical_user_interface.pupil_processor.blur = tuple(x+1 for x in blur)
+                print(f"[INFO] Importer {self.side}: Blur decreased to {config.graphical_user_interface.pupil_processor.blur}.")
 
-        elif msg.get("param") == "maxR":
-            config.graphical_user_interface.max_radius_threshold.max_radius = msg.get("value")
-            print(f"[INFO] Importer {self.side}: maxR set to {msg.get('value')}")
+            elif msg.get("param") == "auto_search":
+                config.arguments.auto_search = msg.get("value")
+                print(f"[INFO] Importer {self.side}: auto_search set to {msg.get('value')}")
 
-        elif msg.get("param") == "step":
-            config.arguments.search_step = msg.get("value")
-            print(f"[INFO] Importer {self.side}: search step set to {msg.get('value')}")
-        elif msg.get("param") == "preview":
+            elif msg.get("param") == "minThrRad":
+                config.graphical_user_interface.pupil_processor.min_radius_threshold.min_radius = msg.get("value")
+                print(f"[INFO] Importer {self.side}: minR set to {msg.get('value')}")
+
+            elif msg.get("param") == "maxThrRad":
+                config.graphical_user_interface.pupil_processor.max_radius_threshold.max_radius = msg.get("value")
+                print(f"[INFO] Importer {self.side}: maxR set to {msg.get('value')}")
+
+            elif msg.get("param") == "search_step":
+                config.arguments.search_step = msg.get("value")
+                print(f"[INFO] Importer {self.side}: search step set to {msg.get('value')}")
+            elif msg.get("param") == "preview":
                 config.preview = msg.get("value")
                 print(f"[INFO] Importer {self.side}: Preview set to {msg.get('value')}")
-        else:
-            print(f"[INFO] Importer {self.side}: Unknown configuration parameter: {msg.get('param')}")
-  
+            else:
+                print(f"[INFO] Importer {self.side}: Unknown configuration parameter: {msg.get('param')}")
+        except Exception as e:
+            print(f"[WARN] Importer {self.side}: Failed to apply config: {e}")
     def _setup_shared_memory(self, msg):
 
         self.frame_shape = tuple(msg["frame_shape"])

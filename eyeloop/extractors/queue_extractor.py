@@ -27,8 +27,7 @@ class QueueExtractor:
                     "frame_id": config.importer.current_frame_id,
                     "data": core.dataout
                 }
-                print(f"[INFO] Extractor {self.side}: Sending response with frame ID: {config.importer.current_frame_id}")
-                print(core.dataout)
+                #print(f"[INFO] Extractor {self.side}: Sending response with frame ID: {config.importer.current_frame_id}")
                 config.response_queue.put(message)
             except ValueError as e:
                 print(f"[ERROR] Extractor {self.side}: QueueExtractor.fetch() error: {e}")

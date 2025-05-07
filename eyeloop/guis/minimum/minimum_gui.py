@@ -361,8 +361,8 @@ class GUI:
             self.bin_CR[0:20, 0:self.binary_width] = self.crstock_txt
             pass
 
-        #cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
-        #cv2.imshow("CONFIGURATION", source_rgb)
+        cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
+        cv2.imshow("CONFIGURATION", source_rgb)
         #self.out.write(source_rgb)
 
         self.key_listener(cv2.waitKey(50))

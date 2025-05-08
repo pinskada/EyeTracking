@@ -78,8 +78,8 @@ class Importer():
 
         print("Arming the engine...")
         config.engine.arm(
-            width=self.frame_shape[0],
-            height=self.frame_shape[1],
+            height=self.frame_shape[0],
+            width=self.frame_shape[1],
             image=frame
         )   
 
@@ -109,23 +109,26 @@ class Importer():
 
         try:
             if  msg.get("param") == "threshold_down":
-                config.graphical_user_interface.pupil_processor.binarythreshold += 1
-                print(f"[INFO] Importer {self.side}: Thresholsd increased to {config.graphical_user_interface.pupil_processor.binarythreshold}.")
-
-            elif  msg.get("param") == "threshold_up":
                 config.graphical_user_interface.pupil_processor.binarythreshold -= 1
                 print(f"[INFO] Importer {self.side}: Thresholsd decreased to {config.graphical_user_interface.pupil_processor.binarythreshold}.")
 
+            elif  msg.get("param") == "threshold_up":
+                config.graphical_user_interface.pupil_processor.binarythreshold += 1
+                print(f"[INFO] Importer {self.side}: Thresholsd increased to {config.graphical_user_interface.pupil_processor.binarythreshold}.")
+
             elif msg.get("param") == "blur_down":
                 blur = config.graphical_user_interface.pupil_processor.blur
-                config.graphical_user_interface.pupil_processor.blur = tuple(x-1 for x in blur)
-                print(f"[INFO] Importer {self.side}: Blur increased to {config.graphical_user_interface.pupil_processor.blur}.")
+                if blur[0] >= 3 and blur[1] >= 3:
+                    config.graphical_user_interface.pupil_processor.blur = tuple(x-2 for x in blur)
+                    print(f"[INFO] Importer {self.side}: Blur idecreased to {config.graphical_user_interface.pupil_processor.blur}.")
+                else:
+                    print(f"[INFO] Importer {self.side}: Minimum blur reached.")
 
             elif msg.get("param") == "blur_up":
                 blur = config.graphical_user_interface.pupil_processor.blur
-                config.graphical_user_interface.pupil_processor.blur = tuple(x+1 for x in blur)
-                print(f"[INFO] Importer {self.side}: Blur decreased to {config.graphical_user_interface.pupil_processor.blur}.")
-
+                config.graphical_user_interface.pupil_processor.blur = tuple(x+2 for x in blur)
+                print(f"[INFO] Importer {self.side}: Blur increased to {config.graphical_user_interface.pupil_processor.blur}.")
+    
             elif msg.get("param") == "auto_search":
                 config.arguments.auto_search = msg.get("value")
                 print(f"[INFO] Importer {self.side}: auto_search set to {msg.get('value')}")

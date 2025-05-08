@@ -38,10 +38,6 @@ class GUI:
         self.cr1_ = lambda _: False
         self.cr2_ = lambda _: False
 
-
-
-
-
     def tip_mousecallback(self, event, x: int, y: int, flags, params) -> None:
         if event == cv2.EVENT_LBUTTONDOWN:
             if 10 < y < 35:
@@ -361,8 +357,8 @@ class GUI:
             self.bin_CR[0:20, 0:self.binary_width] = self.crstock_txt
             pass
 
-        cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
-        cv2.imshow("CONFIGURATION", source_rgb)
+        #cv2.imshow("BINARY", np.vstack((self.bin_P, self.bin_CR)))
+        #cv2.imshow("CONFIGURATION", source_rgb)
         #self.out.write(source_rgb)
 
         self.key_listener(cv2.waitKey(50))

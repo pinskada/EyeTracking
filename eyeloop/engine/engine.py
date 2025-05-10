@@ -9,6 +9,8 @@ import eyeloop.config as config
 from eyeloop.constants.engine_constants import *
 from eyeloop.engine.processor import Shape
 from eyeloop.utilities.general_operations import to_int, tuple_int
+from eyeloop.utilities.paramSave import save_pupil_parameters
+from eyeloop.utilities.paramRead import read_pupil_parameters
 
 logger = logging.getLogger(__name__)
 PARAMS_DIR = f"{dirname(dirname(abspath(__file__)))}/engine/params"
@@ -20,6 +22,7 @@ class Engine:
 
         self.eyeloop = eyeloop
         self.model = config.arguments.model  # Used for assigning appropriate circular model.
+        self.side = config.arguments.side
 
         self.extractors = []
 
@@ -80,6 +83,8 @@ class Engine:
         self.width, self.height = width, height
         config.graphical_user_interface.arm(width, height)
         self.center = (width//2, height//2)
+
+        read_pupil_parameters(self.side)
 
         self.iterate(image)
 
@@ -158,6 +163,7 @@ class Engine:
         Finally, data is logged and extractors are run.
         """
         mean_img = np.mean(img)
+        print(f"Mean: {mean_img}")
         try:
 
             config.blink[config.blink_i] = mean_img
@@ -211,20 +217,14 @@ class Engine:
         """
         Releases/deactivates all running process, i.e., importers, extractors.
         """
+
+        save_pupil_parameters(self.side)
+
         try:
             config.graphical_user_interface.out.release()
         except:
             pass
 
-        param_dict = {
-        "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
-        "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
-        "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
-        }
-
-        #path = f"{config.file_manager.new_folderpath}/params_{self.dataout['time']}.npy"
-        #np.save(path, param_dict)
-        #print("Parameters saved")
 
         self.live = False
         config.graphical_user_interface.release()

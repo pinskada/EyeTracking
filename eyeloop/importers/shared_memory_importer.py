@@ -69,7 +69,7 @@ class Importer():
 
     def first_frame(self) -> None:
         print(f"[INFO] Importer {self.side}: First frame processing started.\n")
-        
+
         try:
             frame = self.route_frame()
         except Exception as e:
@@ -96,7 +96,7 @@ class Importer():
                 self.close_memory()
             elif msg.get("type") == "close":
                 print(f"[INFO] Importer {self.side}: Closing shared memory...")
-                self.release()
+                config.engine.release()
             elif msg.get("type") == "config":
                 self.configure(msg)
             else:
@@ -134,11 +134,11 @@ class Importer():
                 print(f"[INFO] Importer {self.side}: auto_search set to {msg.get('value')}")
 
             elif msg.get("param") == "minThrRad":
-                config.graphical_user_interface.pupil_processor.min_radius_threshold.min_radius = msg.get("value")
+                config.graphical_user_interface.pupil_processor.min_radius = msg.get("value")
                 print(f"[INFO] Importer {self.side}: minR set to {msg.get('value')}")
 
             elif msg.get("param") == "maxThrRad":
-                config.graphical_user_interface.pupil_processor.max_radius_threshold.max_radius = msg.get("value")
+                config.graphical_user_interface.pupil_processor.max_radius = msg.get("value")
                 print(f"[INFO] Importer {self.side}: maxR set to {msg.get('value')}")
 
             elif msg.get("param") == "search_step":

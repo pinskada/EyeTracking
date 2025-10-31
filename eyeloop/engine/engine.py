@@ -1,14 +1,16 @@
+"""Core engine for eyeloop eye-tracking module."""
+
 import logging
 import time
-from typing import Optional
 from os.path import dirname, abspath
-import glob, os
+import glob
+import os
 
+import numpy as np
 
 import eyeloop.config as config
 from eyeloop.constants.engine_constants import *
 from eyeloop.engine.processor import Shape
-from eyeloop.utilities.general_operations import to_int, tuple_int
 from eyeloop.utilities.paramSave import save_pupil_parameters
 from eyeloop.utilities.paramRead import read_pupil_parameters
 
@@ -16,6 +18,8 @@ logger = logging.getLogger(__name__)
 PARAMS_DIR = f"{dirname(dirname(abspath(__file__)))}/engine/params"
 
 class Engine:
+    """Core engine for eyeloop eye-tracking module."""
+
     def __init__(self, eyeloop):
 
         self.live = True  # Access this to check if Core is running.
@@ -26,12 +30,16 @@ class Engine:
 
         self.extractors = []
 
-        if config.arguments.tracking == 0:  # Recording mode. --tracking 0
-            self.iterate = self.record
-        else:  # Tracking mode. --tracking 1 (default)
-            self.iterate = self.track
+        # if config.arguments.tracking == 0:  # Recording mode. --tracking 0
+        #     self.iterate = self.record
+        # else:  # Tracking mode. --tracking 1 (default)
+
+        self.iterate = self.track
 
         self.angle = 0
+        self.width: int
+        self.height: int
+        self.center: tuple[int, int]
 
         self.cr_processor_1 = Shape(type = 2, n = 1)
         self.cr_processor_2 = Shape(type = 2, n = 2)
@@ -42,6 +50,7 @@ class Engine:
         self.refresh_pupil = lambda x: None
 
     def load_extractors(self, extractors: list = None) -> None:
+        """Loads additional extractor modules into the core engine."""
         if extractors is None:
             extractors = []
         #logger.info(f"loading extractors: {extractors}")
@@ -79,6 +88,7 @@ class Engine:
         self.run_extractors()
 
     def arm(self, width, height, image) -> None:
+        """Arms the engine with initial parameters and settings."""
 
         self.width, self.height = width, height
         config.graphical_user_interface.arm(width, height)
@@ -93,7 +103,7 @@ class Engine:
             self.blink_sampled = lambda _:None
             #logger.info("(success) blink calibration loaded")
 
-        if config.arguments.clear == False or config.arguments.params != "":
+        if not config.arguments.clear or config.arguments.params != "":
 
             try:
                 if config.arguments.params != "":
@@ -106,31 +116,39 @@ class Engine:
 
                 params_ = np.load(latest_params, allow_pickle=True).tolist()
 
-                self.pupil_processor.binarythreshold, self.pupil_processor.blur = params_["pupil"][0], params_["pupil"][1]
+                self.pupil_processor.binarythreshold = params_["pupil"][0]
+                self.pupil_processor.blur = params_["pupil"][1]
 
-                self.cr_processor_1.binarythreshold, self.cr_processor_1.blur = params_["cr1"][0], params_["cr1"][1]
-                self.cr_processor_2.binarythreshold, self.cr_processor_2.blur = params_["cr2"][0], params_["cr2"][1]
+                self.cr_processor_1.binarythreshold = params_["cr1"][0]
+                self.cr_processor_1.blur = params_["cr1"][1]
+
+                self.cr_processor_2.binarythreshold = params_["cr2"][0]
+                self.cr_processor_2.blur = params_["cr2"][1]
 
                 print("(!) Parameters reloaded. Run --clear 1 to prevent this.")
 
 
                 param_dict = {
-                "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
-                "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
-                "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
+                    "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
+                    "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
+                    "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur],
                 }
 
                 #logger.info(f"loaded parameters:\n{param_dict}")
-                pass
+
                 return
 
             except:
-                pass
+                print("(!) Failed to load parameters.")
 
 
         filtered_image = image[np.logical_and((image < 220), (image > 30))]
-        self.pupil_processor.binarythreshold = np.min(filtered_image) * 1 + np.median(filtered_image) * .1#+ 50
-        self.cr_processor_1.binarythreshold = self.cr_processor_2.binarythreshold = float(np.min(filtered_image)) * .7 + 150
+        self.pupil_processor.binarythreshold = (
+            np.min(filtered_image) * 1 +
+            np.median(filtered_image) * .1
+        )#+ 50
+        self.cr_processor_1.binarythreshold = self.cr_processor_2.binarythreshold = (
+            float(np.min(filtered_image)) * .7 + 150)
 
         param_dict = {
         "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
@@ -141,17 +159,19 @@ class Engine:
         #logger.info(f"loaded parameters:\n{param_dict}")
 
 
-    def blink_sampled(self, t:int = 1):
+    def blink_sampled(self, t: int = 1):
+        """Calibrates blink detection based on sampled mean image intensity."""
 
         if t == 1:
-            if config.blink_i% 20 == 0:
-                print(f"calibrating blink detector {round(config.blink_i/config.blink.shape[0]*100,1)}%")
+            if config.blink_i % 20 == 0:
+                print(f"calibrating blink detector "
+                    f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
         else:
             logger.info("(success) blink detection calibrated")
             path = f"{config.file_manager.new_folderpath}/blinkcalibration_.npy"
             np.save(path, config.blink)
             print("blink calibration file saved")
-            pass
+
 
     def track(self, img) -> None:
         """
@@ -162,6 +182,7 @@ class Engine:
         Fourth, pupil is detected.
         Finally, data is logged and extractors are run.
         """
+
         mean_img = np.mean(img)
         print(f"Mean: {mean_img}")
         try:
@@ -172,7 +193,7 @@ class Engine:
 
         except IndexError:
             self.blink_sampled(0)
-            self.blink_sampled = lambda _:None
+            self.blink_sampled = lambda _: None
             config.blink_i = 0
 
         self.dataout = {
@@ -195,7 +216,8 @@ class Engine:
         try:
             config.graphical_user_interface.update(img)
         except Exception as e:
-            print("Did you assign the graphical user interface (GUI) correctly? Attempting to release()")
+            print("Did you assign the graphical user interface (GUI) correctly? "
+                f"Attempting to release(): {e}")
             self.release()
             return
 

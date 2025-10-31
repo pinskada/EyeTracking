@@ -1,3 +1,6 @@
+"""Processor module for eye features (pupil, corneal reflection)."""
+
+import numpy as np
 import cv2
 
 import eyeloop.config as config
@@ -5,18 +8,19 @@ from eyeloop.constants.processor_constants import *
 from eyeloop.engine.models.circular import Circle
 from eyeloop.engine.models.ellipsoid import Ellipse
 from eyeloop.utilities.general_operations import to_int, tuple_int
-import time
-import logging
 
-#logger = logging.getLogger(__name__)
 
 class Center_class():
+    """Center processor for eye features (pupil, corneal reflection)."""
+
     def fit(self, r):
 
         self.params = tuple(np.mean(r, axis = 0))
         return self.params
 
+
 class Shape():
+    """Shape processor for eye features (pupil, corneal reflection)."""
     def __init__(self, type = 1, n = 0):
 
         self.active = False
@@ -78,6 +82,7 @@ class Shape():
 
         self.source[:] = cv2.threshold(cv2.GaussianBlur(cv2.erode(self.source, kernel, iterations = 1), self.blur, 0), self.binarythreshold, 255, cv2.THRESH_BINARY_INV)[1]
         #self.source[:] = cv2.GaussianBlur(self.source, self.blur, 0)
+
 
     def cr_thresh(self):
         # CR

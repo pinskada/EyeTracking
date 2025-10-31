@@ -1,3 +1,5 @@
+"""Base class for all importer modules."""
+
 import cv2
 import numpy as np
 
@@ -6,7 +8,7 @@ from eyeloop.utilities.general_operations import tuple_int
 
 
 class IMPORTER:
-
+    """Base class for all importer modules."""
     def __init__(self):
         self.live = True
         self.scale = config.arguments.scale
@@ -25,7 +27,9 @@ class IMPORTER:
         else:
             self.rotate_ = lambda img, _: None
 
+
     def arm(self, width, height, image):
+        """Arms the engine with the specified dimensions."""
 
         self.dimensions = tuple_int((width * self.scale, height * self.scale))
 
@@ -41,27 +45,37 @@ class IMPORTER:
         self.resize(image)
 
         # image = self.rotate(image, self.ENGINE.angle)
-        
+
         config.engine.arm(width, height, image)
+
 
     def rotate(self, image: np.ndarray, angle: int) -> np.ndarray:
         """
-        Performs rotaiton of the image to align visual axes.
+        Performs rotation of the image to align visual axes.
         """
 
         if angle == 0:
-            return
+            return image
 
-        M = cv2.getRotationMatrix2D(self.center, angle, 1)
+        m = cv2.getRotationMatrix2D(self.center, angle, 1)
 
-        image[:] = cv2.warpAffine(image, M, self.dimensions, cv2.INTER_NEAREST)
+        image[:] = cv2.warpAffine(image, m, self.dimensions, cv2.INTER_NEAREST)
+
+        return image
 
     def resize_image(self, image: np.ndarray) -> np.ndarray:
         """
         Resizes image to scale value. -sc 1 (default)
         """
 
-        return cv2.resize(image, None, fx=self.scale, fy=self.scale, interpolation=cv2.INTER_NEAREST)
+        return cv2.resize(
+            image,
+            None,
+            fx=self.scale,
+            fy=self.scale,
+            interpolation=cv2.INTER_NEAREST
+        )
+
 
     def crop(self, image: np.ndarray) -> np.ndarray:
         """
@@ -73,16 +87,21 @@ class IMPORTER:
         if config.arguments.side == "L":
 
             return image[:, :half_width]
-        
+
         elif config.arguments.side == "R":
 
             return image[:, half_width:]
 
         return image
-    
+
+
     def save(self, image: np.ndarray) -> None:
+        """Saves the current frame to disk."""
         config.file_manager.save_image(image, self.frame)
 
+
     def release(self):
+        """Releases resources held by the importer."""
+
         self.release = lambda:None
         config.engine.release()

@@ -1,18 +1,33 @@
-version = "0.35-beta"
-importer = 0
-eyeloop = 0
-engine = 0
-arguments = 0
-file_manager = 0
-graphical_user_interface = 0
-command_queue = 0
-response_queue = 0
-sync_queue = 0
-acknowledge_queue = 0
-preview = 0
+# pylint: disable=invalid-name
+"""Configuration module for EyeLoop eye-tracking system."""
+import multiprocessing as mp
+from multiprocessing.synchronize import Event as MpEvent
 
-#blink = 142.08
 import numpy as np
+
+from eyeloop.utilities.argument_parser import Arguments
+from eyeloop.engine.engine import Engine
+from eyeloop.utilities.file_manager import File_Manager
+from eyeloop.guis.minimum.minimum_gui import GUI
+from eyeloop.importers.importer import IMPORTER
+
 blink = np.zeros(300, dtype=np.float64)
 
 blink_i = 0
+
+version = "0.35-beta"
+importer: IMPORTER
+eyeloop = 0
+engine: Engine
+arguments: Arguments
+file_manager: File_Manager
+graphical_user_interface: GUI
+
+command_queue: mp.Queue
+response_queue: mp.Queue
+
+eye_ready_signal: MpEvent
+tracker_shm_is_closed_signal: MpEvent
+
+preview = 0
+current_frame_id: int

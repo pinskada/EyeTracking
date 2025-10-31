@@ -1,3 +1,5 @@
+"""Argument parser for Eyeloop module."""
+
 import argparse
 from pathlib import Path
 
@@ -14,7 +16,7 @@ class Arguments:
         self.config = None
         self.markers = None
         self.video = None
-        self.output_dir = None
+        self.output_dir: str
         self.importer = None
         self.scale = None
         self.tracking = None
@@ -26,33 +28,46 @@ class Arguments:
         self.auto_search = None
         self.tracker_fps = None
         self.sharedmem = None
-    
+        self.extractors = None
+        self.img_format: str
+        self.save = None
+        self.rotation = None
+        self.fps = None
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
 
     @staticmethod
     def parse_args(args):
+        """Parses command-line arguments."""
+
         parser = argparse.ArgumentParser(description='Help list')
         parser.add_argument("-v", "--video", default="0", type=str,
                             help="Input a video sequence for offline processing.")
 
-        parser.add_argument("-o", "--output_dir", default=str(PROJECT_DIR.joinpath("data").absolute()), type=str,
+        parser.add_argument("-o", "--output_dir",
+                            default=str(PROJECT_DIR.joinpath("data").absolute()),
+                            type=str,
                             help="Specify output destination.")
-        
-        parser.add_argument("-c", "--config", default="0", type=str, help="Input a .pupt config file (preset).")
+
+        parser.add_argument("-c", "--config",
+                            default="0", type=str,
+                            help="Input a .pupt config file (preset).")
 
         parser.add_argument("-i", "--importer", default="cv", type=str,
                             help="Set import route of stream (cv, vimba, ...)")
-        
-        parser.add_argument("-sc", "--scale", default=1, type=float, help="Scale the stream (default: 1; 0-1)")
+
+        parser.add_argument("-sc", "--scale",
+                            default=1, type=float,
+                            help="Scale the stream (default: 1; 0-1)")
 
         parser.add_argument("-m", "--model", default="circular", type=str,
                             help="Set pupil model type (circular; ellipsoid = default).")
-        
+
         parser.add_argument("-ma", "--markers", default=0, type=int,
-                            help="Enable/disable artifact removing markers (0: disable/default; 1: enable)")
-        
+                            help="Enable/disable artifact removing markers "
+                            "(0: disable/default; 1: enable)")
+
         parser.add_argument("-tr", "--tracking", default=1, type=int,
                             help="Enable/disable tracking (1/enabled: default).")
 
@@ -60,7 +75,8 @@ class Arguments:
                             help="Set file-path of extractor Python file. p = start file prompt.")
 
         parser.add_argument("-imgf", "--img_format", default="frame_$.jpg", type=str,
-                            help="Set img format for import (default: frame_$.jpg where $ = 1, 2,...)")
+                            help="Set img format for import "
+                            "(default: frame_$.jpg where $ = 1, 2,...)")
 
         parser.add_argument("-sv", "--save", default=1, type=int,
                             help="Save video feed or not (yes/no, 1/0; default = 1)")
@@ -79,38 +95,41 @@ class Arguments:
 
         parser.add_argument("-b", "--blink", default="", type=str,
                             help="Load blink calibration file (.npy)")
-        
+
         parser.add_argument("-s", "--side", default="B", type=str,
                             help="Chooses what side of the image to work with")
-        
+
         parser.add_argument("-thr", "--min_radius_threshold", default = 5, type=int,
                             help="Minimal radius threshold for pupil fitting")
-        
+
         parser.add_argument("-mthr", "--max_radius_threshold", default = 20, type=int,
                             help="Maximum radius threshold for pupil fitting")
-        
-        parser.add_argument("-srs", "--search_step", default=20, type=int,                            
+
+        parser.add_argument("-srs", "--search_step", default=20, type=int,
                             help="Step with which the pupil search patterns increases")
-        
+
         parser.add_argument("-as", "--auto_search", default=1, type=int,
                             help="Automatic search for pupil (yes/no, 1/0) - default = 1")
-        
+
         parser.add_argument("-trf", "--tracker_fps", default=1000, type=int,
                             help="Refresh rate cap for the tracker (default = 1000)")
-        
+
         parser.add_argument("-shm", "--sharedmem", default="", type=str,
-                            help="Name of the shared memory segment for inter-process communication.")
-        
+                            help="Name of the shared memory segment "
+                            "for inter-process communication.")
+
         return parser.parse_args(args)
 
     def build_config(self, parsed_args):
+        """Builds configuration from parsed arguments."""
         self.config = parsed_args.config
 
         if self.config != "0":  # config file was set.
             self.parse_config(self.config)
 
         self.markers = parsed_args.markers
-        self.video = Path(parsed_args.video.strip("\'\"")).absolute()  # Handle quotes used in argument
+        # Handle quotes used in arguments
+        self.video = Path(parsed_args.video.strip("\'\"")).absolute()
         self.output_dir = Path(parsed_args.output_dir.strip("\'\"")).absolute()
         self.importer = parsed_args.importer.lower()
         self.scale = parsed_args.scale
@@ -131,10 +150,12 @@ class Arguments:
         self.auto_search = parsed_args.auto_search
         self.tracker_fps = parsed_args.tracker_fps
         self.sharedmem = parsed_args.sharedmem
-        
+
         #self.blink = parsed_args.blink
 
     def parse_config(self, config: str) -> None:
+        """Parses a .pupt config file and sets parameters accordingly."""
+
         with open(config, "r") as content:
             print("Loading config preset: ", config)
             for line in content:
@@ -199,6 +220,5 @@ class Arguments:
                 elif parameter == "sharedmem":
                     print("sharedmem: ", parameter)
                     self.sharedmem = parameter
-                
 
             print("")

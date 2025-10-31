@@ -1,17 +1,18 @@
+"""Minimum GUI for Eyeloop module."""
+
 import os
-from pathlib import Path
+import threading
 
 import numpy as np
 import cv2
+
 import eyeloop.config as config
 from eyeloop.constants.minimum_gui_constants import *
 from eyeloop.utilities.general_operations import to_int, tuple_int
-import threading
 
-import logging
-#logger = logging.getLogger(__name__)
 
 class GUI:
+    """Minimum GUI for Eyeloop module."""
     def __init__(self) -> None:
 
 
@@ -38,6 +39,7 @@ class GUI:
         self.cr1_ = lambda _: False
         self.cr2_ = lambda _: False
 
+    # pylint: disable=unused-argument
     def tip_mousecallback(self, event, x: int, y: int, flags, params) -> None:
         if event == cv2.EVENT_LBUTTONDOWN:
             if 10 < y < 35:
@@ -47,19 +49,24 @@ class GUI:
 
                     self.update_tool_tip(x)
 
+
+    # pylint: disable=unused-argument
     def mousecallback(self, event, x, y, flags, params) -> None:
         x = x % self.width
         self.cursor = (x, y)
+
 
     def release(self):
         #self.out.release()
         #cv2.destroyAllWindows()
         pass
 
+
     def remove_mousecallback(self) -> None:
         #cv2.setMouseCallback("CONFIGURATION", lambda *args: None)
         #cv2.setMouseCallback("Tool tip", lambda *args: None)
         pass
+
 
     def update_tool_tip(self, index: int, error: bool = False) -> None:
         """
@@ -69,6 +76,7 @@ class GUI:
             cv2.imshow("Tool tip", self.tool_tips[index - 1])
         """
         pass
+
 
     def key_listener(self, key: int) -> None:
         try:
@@ -211,6 +219,7 @@ class GUI:
 
         #print(f"loaded parameters:\n{param_dict}")
 
+
     def arm(self, width: int, height: int) -> None:
         self.fps = np.round(1/config.arguments.fps, 2)
 
@@ -233,7 +242,7 @@ class GUI:
         self.bin_P = self.bin_stock.copy()
         self.bin_CR = self.bin_stock.copy()
         #self.CRStock = self.bin_stock.copy()
-        
+
         self.src_txt = np.zeros((20, width, 3))
         self.prev_txt = self.src_txt.copy()
         cv2.putText(self.src_txt, 'Source', (15, 12), font, .7, (255, 255, 255), 0, cv2.LINE_4)
@@ -261,12 +270,13 @@ class GUI:
         #cv2.imshow("Tool tip", self.first_tool_tip)
 
         #cv2.moveWindow("Tool tip", 100, 1000 + height + 100)
-        
+
         #try:
         #    cv2.setMouseCallback("CONFIGURATION", self.mousecallback)
         #    cv2.setMouseCallback("Tool tip", self.tip_mousecallback)
         #except:
         #    print("Could not bind mouse-buttons.")
+
 
     def place_cross(self, source: np.ndarray, point: tuple, color: tuple) -> None:
         try:
@@ -280,6 +290,7 @@ class GUI:
         #cv2.imshow("Recording", frame_preview)
         if cv2.waitKey(1) == ord('q'):
             config.engine.release()
+
 
     def skip_track(self):
         self.update = self.real_update
@@ -296,6 +307,7 @@ class GUI:
             #print(f"pupil not found: {e}")
             return False
 
+
     def cr_1(self, source_rgb):
         try:
             #cr_center, cr_width, cr_height, cr_angle = params = self.cr_processor_1.fit_model.params
@@ -307,6 +319,7 @@ class GUI:
             print(f"cr1 func: {e}")
             return False
 
+
     def cr_2(self, source_rgb):
         try:
             #cr_center, cr_width, cr_height, cr_angle = params = self.cr_processor_2.fit_model.params
@@ -317,6 +330,7 @@ class GUI:
         except Exception as e:
             print(f"cr2 func: {e}")
             return False
+
 
     def adj_update(self, img):
         source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -373,6 +387,7 @@ class GUI:
 
                 self.pupil_lock()
 
+
     def real_update(self, img) -> None:
         source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         self.pupil_(source_rgb)
@@ -389,16 +404,17 @@ class GUI:
 
             #config.engine.release()
 
+
     def pupil_lock(self):
         """
-        This method tries to lock on to the pupil. If sucessful it initiates the tracking algorithm. If not, it calls
-        center_offset_generater() to adjust the cursor calue.
+        This method tries to lock on to the pupil. If sucessful it initiates the tracking algorithm.
+        If not, it calls center_offset_generater() to adjust the cursor value.
         """
 
         try:
             # If sucessful, tracking is initiated
             if self.pupil_processor.fit_model.params[1] > config.arguments.min_radius_threshold and self.pupil_processor.fit_model.params[1] < config.arguments.max_radius_threshold:
-                
+
                 param_dict = {
                     "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
                     "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
@@ -428,25 +444,27 @@ class GUI:
             else:
                 # If not sucessful, cursor adjustment is made
                 self.center_offset_generator()
-                pass
+
         except:
             pass
-        
+
         # Tries to lock on to the pupil with the current cursor value
         self.pupil_processor.reset(self.cursor)
         self.pupil_ = self.pupil
+
 
     def center_offset_generator(self):
         """
         This method changes the value of cursor for searching the pupil.
         It circles (moves in a square) around the centre of the images.
         The position difference between the new and old cursor value is always in size of step.
-        After finishing a whole circle (square) a new and bigger one will initiate with radius of step * self.circle_size.
+        After finishing a whole circle (square) a new and bigger one
+        will initiate with radius of step * self.circle_size.
         Current position of the square is given by self.cycle
         """
 
         # Square value computation---------------------------------------------
-        
+
         step = config.arguments.search_step # Step size for the search
 
         if self.cycle == 1:                             # Initial position
@@ -454,14 +472,14 @@ class GUI:
             self.dy = - step * self.circle_size
             #print("x: " + str(self.dx) + ", y: " + str(self.dy))
         elif self.cycle < (4 + 2*(self.circle_size-1)): # Top side
-            self.dx += step            
+            self.dx += step
         elif self.cycle < (6 + 4*(self.circle_size-1)): # Right side
             self.dy += step
         elif self.cycle < (8 + 6*(self.circle_size-1)): # Bottom side
             self.dx -= step
         else:                                           # Left side
             self.dy -= step
-             
+
 
         # Value assignment-----------------------------------------------------
 
@@ -480,6 +498,6 @@ class GUI:
             self.circle_size += 1 # Next circle will be bigger
             self.cycle = 1 # Reset cycle count
             return
-        
+
         # Increase cycle count for next search
-        self.cycle += 1 
+        self.cycle += 1

@@ -1,3 +1,5 @@
+"""File management utilities for EyeLoop eye-tracking system."""
+
 import time
 from pathlib import Path
 from typing import Union
@@ -5,7 +7,7 @@ from typing import Union
 import cv2
 import numpy as np
 
-
+#  pylint: disable=invalid-name
 class File_Manager:
     """
     The file manager...
@@ -24,9 +26,9 @@ class File_Manager:
         self.output_root.mkdir(exist_ok=True, parents=True)
 
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        self.new_folderpath = self.output_root / f"trial_{timestamp}"
+        self.new_folderpath: Union[Path, str] = self.output_root / f"trial_{timestamp}"
         self.new_folderpath.mkdir(exist_ok=True)
-        print(f"Outputting data to {self.new_folderpath}")  # TODO convert to logging call
+        print(f"Outputting data to {self.new_folderpath}")
 
     def save_image(self, image: np.ndarray, frame: int) -> None:
         """

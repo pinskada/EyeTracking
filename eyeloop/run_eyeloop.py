@@ -12,6 +12,7 @@ from eyeloop.utilities.argument_parser import Arguments
 from eyeloop.utilities.file_manager import File_Manager
 from eyeloop.utilities.shared_logging import setup_logging
 from eyeloop.importers.shared_memory_importer import Importer
+from vr_core.utilities.logger_setup import setup_logger
 
 EYELOOP_DIR = Path(__file__).parent
 PROJECT_DIR = EYELOOP_DIR.parent
@@ -35,6 +36,9 @@ class EyeLoop:
         tracker_shm_is_closed_signal: MpEvent,
         logger=None,
     ):
+        """Initialize EyeLoop with the specified configuration."""
+
+        self.logger = setup_logger("EyeLoop_Run")
         if (command_queue is None or
             response_queue is None or
             eye_ready_signal is None or
@@ -59,6 +63,8 @@ class EyeLoop:
                 log_dir=str(config.file_manager.new_folderpath),
                 module_name="run_eyeloop"
             )
+
+        self.logger.info("Service initialized.")
 
         self.run()
 
@@ -92,4 +98,4 @@ class EyeLoop:
             # exec(import_command, globals())
 
         except ImportError:
-            print("Invalid importer selected")
+            self.logger.error("Invalid importer selected")

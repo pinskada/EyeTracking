@@ -13,14 +13,17 @@ from eyeloop.constants.engine_constants import *
 from eyeloop.engine.processor import Shape
 from eyeloop.utilities.paramSave import save_pupil_parameters
 from eyeloop.utilities.paramRead import read_pupil_parameters
+from vr_core.utilities.logger_setup import setup_logger
 
-logger = logging.getLogger(__name__)
+
 PARAMS_DIR = f"{dirname(dirname(abspath(__file__)))}/engine/params"
 
 class Engine:
     """Core engine for eyeloop eye-tracking module."""
 
     def __init__(self, eyeloop):
+
+        self.logger = setup_logger("EyeLoop_Engine")
 
         self.live = True  # Access this to check if Core is running.
 
@@ -48,6 +51,7 @@ class Engine:
         #   Via "gui", assign "refresh_pupil" to function "processor.refresh_source"
         #   when the pupil has been selected.
         self.refresh_pupil = lambda x: None
+
 
     def load_extractors(self, extractors: list = None) -> None:
         """Loads additional extractor modules into the core engine."""

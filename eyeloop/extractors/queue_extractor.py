@@ -3,19 +3,22 @@
 import numpy as np
 
 import eyeloop.config as config
+from vr_core.utilities.logger_setup import setup_logger
 
 
 class QueueExtractor:
     """Queue extractor for sending processed data via queues."""
 
     def __init__(self):
+        self.logger = setup_logger(f"{config.arguments.side} QueueExtractor")
         self.response_queue = config.response_queue
         self.side = config.arguments.side
+        self.eye_ready_signal = config.eye_ready_signal
 
 
     def activate(self):
         """Activate the QueueExtractor."""
-        print(f"[INFO] Extractor {self.side}: QueueExtractor activated.")
+        self.logger.info("Service activated.")
 
 
     def fetch(self, core):
@@ -23,7 +26,9 @@ class QueueExtractor:
         if config.importer != 0:
 
             # Signal to FrameProvider to fetch the next frame
-            config.eye_ready_signal.set()
+            self.eye_ready_signal.set()
+            self.logger.info("eye_ready_s set.")
+
 
             # Create message with tracking data
             tracking_data_message = {
@@ -33,7 +38,8 @@ class QueueExtractor:
             }
 
             # Send tracking data message via response queue
-            config.response_queue.put(tracking_data_message)
+            self.response_queue.put(tracking_data_message)
+            self.logger.info("response_queue: tracking_data sent.")
 
             if config.preview:
 
@@ -46,7 +52,7 @@ class QueueExtractor:
 
                 bit_map = np.packbits(image_preview.astype(np.uint8))
 
-                tracking_data_message = {
+                preview_image_message = {
                     "type": "image_preview",
                     "frame_id": config.current_frame_id,
                     "height": image_height,
@@ -55,7 +61,8 @@ class QueueExtractor:
                 }
 
                 # Send image preview message via response queue
-                config.response_queue.put(tracking_data_message)
+                self.response_queue.put(preview_image_message)
+                self.logger.info("response_queue: preview_image sent.")
 
 
     def __name__(self):
@@ -66,4 +73,3 @@ class QueueExtractor:
     #  pylint: disable=unused-argument
     def release(self, core):
         """Release resources held by the QueueExtractor."""
-        print(f"[INFO] Extractor {self.side}: QueueExtractor released called, passing.")

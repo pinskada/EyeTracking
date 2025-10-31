@@ -21,7 +21,7 @@ class Arguments:
         self.scale = None
         self.tracking = None
         self.model = None
-        self.side = None
+        self.side: str
         self.min_radius_threshold = None
         self.max_radius_threshold = None
         self.search_step = None

@@ -87,7 +87,7 @@ class Importer():
             self._configure(msg)
         elif msg.get("type") == "frame_id":
             frame_id = msg.get("value")
-            self.logger.info("<%s> Received ID: %d", self.side, frame_id)
+            #self.logger.info("<%s> Received ID: %d", self.side, frame_id)
             config.current_frame_id = frame_id
             self.new_frame_event.set()
         else:
@@ -205,12 +205,13 @@ class Importer():
 
     def _close_shm(self):
         """Close the shared memory segment."""
-        try:
-            self.shm.close()
-            self.tracker_shm_is_closed_s.set()
-            self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
-        except (FileNotFoundError, PermissionError, OSError, BufferError) as e:
-            self.logger.error("<%s> Error closing shared memory: %s", self.side, e)
+        if not self.tracker_shm_is_closed_s.is_set():
+            try:
+                self.shm.close()
+                self.tracker_shm_is_closed_s.set()
+                self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
+            except (FileNotFoundError, PermissionError, OSError, BufferError) as e:
+                self.logger.error("<%s> Error closing shared memory: %s", self.side, e)
 
 
     def release(self) -> None:

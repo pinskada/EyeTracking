@@ -1,6 +1,7 @@
 """Queue extractor module for sending processed data via queues."""
 
 import numpy as np
+import cv2
 
 import eyeloop.config as config
 from vr_core.utilities.logger_setup import setup_logger
@@ -14,7 +15,7 @@ class QueueExtractor:
         self.tracker_response_q = config.tracker_response_q
         self.side = config.arguments.side
         self.eye_ready_signal = config.eye_ready_signal
-
+        self.print_state = 0
 
     def activate(self):
         """Activate the QueueExtractor."""
@@ -45,20 +46,24 @@ class QueueExtractor:
             if config.preview:
 
                 # Create message with image preview data
+                self.print_state += 1
+                image_preview = config.engine.pupil_processor.source
+        
+                # mean_image = np.mean(image_preview)
+                # self.logger.info("Mean image value: %s", mean_image)
+                # if config.preview and self.print_state % 50 == 0:
+                #     cv2.imwrite(f"/tmp/preview_{self.print_state}.png", image_preview)
 
-                image_preview = config.graphical_user_interface.bin_P
-
-                image_height = image_preview.shape[0]
-                image_width = image_preview.shape[1]
-
-                bit_map = np.packbits(image_preview.astype(np.uint8))
+                bin_img = (image_preview > 0).astype(np.uint8)
+                image_height, image_width = bin_img.shape[:2]
+                bit_map = np.packbits(bin_img, axis=None, bitorder="big")
 
                 preview_image_message = {
                     "type": "image_preview",
                     "frame_id": config.current_frame_id,
                     "height": image_height,
                     "width": image_width,
-                    "bitmap": bit_map
+                    "bitmap": bit_map.tobytes(),
                 }
 
                 # Send image preview message via response queue

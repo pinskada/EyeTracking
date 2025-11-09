@@ -8,6 +8,7 @@ from eyeloop.constants.processor_constants import *
 from eyeloop.engine.models.circular import Circle
 from eyeloop.engine.models.ellipsoid import Ellipse
 from eyeloop.utilities.general_operations import to_int, tuple_int
+from vr_core.utilities.logger_setup import setup_logger
 
 
 class Center_class():
@@ -23,6 +24,7 @@ class Shape():
     """Shape processor for eye features (pupil, corneal reflection)."""
     def __init__(self, type = 1, n = 0):
 
+        self.logger = setup_logger("Processor")
         self.active = False
         self.center = -1
 
@@ -79,7 +81,7 @@ class Shape():
 
     def pupil_thresh(self):
         # Pupil
-
+        # self.logger.info("Thr: %s; Blur: %s", self.binarythreshold, self.blur[0])
         self.source[:] = cv2.threshold(cv2.GaussianBlur(cv2.erode(self.source, kernel, iterations = 1), self.blur, 0), self.binarythreshold, 255, cv2.THRESH_BINARY_INV)[1]
         #self.source[:] = cv2.GaussianBlur(self.source, self.blur, 0)
 

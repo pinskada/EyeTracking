@@ -2,6 +2,7 @@
 
 from multiprocessing.shared_memory import SharedMemory
 from threading import Event
+import queue
 
 import numpy as np
 
@@ -28,9 +29,10 @@ class Importer():
 
         self.command_queue = config.command_queue
         self.tracker_shm_is_closed_signal = config.tracker_shm_is_closed_signal
+        self.tracker_running_signal = config.tracker_running_signal
 
         self.tracker_shm_is_closed_signal.set()
-        self.logger.info("tracker_shm_is_closed_s set.")
+        #self.logger.info("tracker_shm_is_closed_s set.")
 
         self.set_stop_event = Event()
         self.new_frame_event = Event()
@@ -41,42 +43,44 @@ class Importer():
     def route(self) -> None:
         """Start routing frames from shared memory to the engine."""
 
-        self._load_cmd_queue_message(timeout=10.0)
+        self.tracker_running_signal.set()
+        while True:
+            self._load_cmd_queue_message()
+            if (
+                # SHM has been set and new frame arrived
+                not self.tracker_shm_is_closed_signal.is_set() and 
+                self.new_frame_event.is_set()
+            ):
+                break
 
         self._first_frame()
         self.logger.info("Starting routing.")
         self._proceed()
 
 
-    def _load_cmd_queue_message(self, timeout: float = 5.0) -> None:
+    def _load_cmd_queue_message(self, timeout: float = 0.05) -> None:
         """Loads a message from the command queue."""
 
         try:
-            if not (msg := self.command_queue.get(timeout=timeout)):
-                self.logger.error("No message received from command queue.")
-                return
+            msg = self.command_queue.get(timeout=timeout)
+        except queue.Empty:
+            return
 
-            if self.tracker_shm_is_closed_signal.is_set() and msg.get("type") != "shm_connect":
-                self.logger.warning("First message must be 'shm_connect'.")
-                return
-
-            if msg.get("type") == "shm_connect":
-                self._connect_shm(msg)
-            elif msg.get("type") == "shm_detach":
-                self._close_shm()
-            elif msg.get("type") == "close":
-                self.set_stop_event.set()
-                self.logger.info("set_stop_event set.")
-                config.engine.release()
-            elif msg.get("type") == "config":
-                self._configure(msg)
-            elif msg.get("type") == "frame_id":
-                config.current_frame_id = msg.get("frame_id")
-                self.new_frame_event.set()
-            else:
-                self.logger.warning("Unknown command: %s", msg.get('type'))
-        except Exception:  # pylint: disable=broad-except
-            pass
+        if msg.get("type") == "shm_connect":
+            self._connect_shm(msg)
+        elif msg.get("type") == "shm_detach":
+            self._close_shm()
+        elif msg.get("type") == "close":
+            self.set_stop_event.set()
+            #self.logger.info("set_stop_event set.")
+            config.engine.release()
+        elif msg.get("type") == "config":
+            self._configure(msg)
+        elif msg.get("type") == "frame_id":
+            config.current_frame_id = msg.get("value")
+            self.new_frame_event.set()
+        else:
+            self.logger.warning("Unknown command: %s", msg.get("type"))
 
 
     def _first_frame(self) -> None:
@@ -125,7 +129,7 @@ class Importer():
                 frame = self._get_frame()
                 config.engine.iterate(frame)
                 self.new_frame_event.clear()
-                self.logger.info("new_frame_event cleared.")
+                #self.logger.info("new_frame_event cleared.")
 
 
     def _configure(self, msg):
@@ -133,41 +137,43 @@ class Importer():
 
         try:
             if  msg.get("param") == "threshold":
-                value = msg.get("value")
-                config.graphical_user_interface.pupil_processor.binarythreshold = value
+                thr = msg.get("value")
+                config.engine.pupil_processor.binarythreshold = thr
                 self.logger.info("Threshold decreased to %d",
-                    config.graphical_user_interface.pupil_processor.binarythreshold
+                    thr
                 )
 
-            elif msg.get("param") == "blur":
-                blur = config.graphical_user_interface.pupil_processor.blur
-                if blur[0] >= 3 and blur[1] >= 3:
-                    value = msg.get("value")
-                    config.graphical_user_interface.pupil_processor.blur = (value, value)
-                    self.logger.info("Blur decreased to %s.",
-                        config.graphical_user_interface.pupil_processor.blur
-                    )
-                else:
-                    self.logger.warning("Incorrect blur values: %s.", blur)
+            elif msg.get("param") == "blur_size":
+                blur = msg.get("value")
+
+                if blur % 2 == 0:
+                    blur += 1
+
+                config.engine.pupil_processor.blur = (blur, blur)
+                self.logger.info("Blur decreased to %s.",
+                    blur
+                )
 
             elif msg.get("param") == "auto_search":
                 config.arguments.auto_search = msg.get("value")
                 self.logger.info("auto_search set to %d", msg.get("value"))
 
-            elif msg.get("param") == "minThrRad":
-                config.graphical_user_interface.pupil_processor.min_radius = msg.get("value")
+            elif msg.get("param") == "min_radius":
+                config.engine.pupil_processor.min_radius = msg.get("value")
                 self.logger.info("minR set to %d", msg.get("value"))
 
-            elif msg.get("param") == "maxThrRad":
-                config.graphical_user_interface.pupil_processor.max_radius = msg.get("value")
+            elif msg.get("param") == "max_radius":
+                config.engine.pupil_processor.max_radius = msg.get("value")
                 self.logger.info("maxR set to %d", msg.get("value"))
 
             elif msg.get("param") == "search_step":
                 config.arguments.search_step = msg.get("value")
                 self.logger.info("search step set to %d", msg.get("value"))
+
             elif msg.get("param") == "preview":
                 config.preview = msg.get("value")
                 self.logger.info("Preview set to %d", msg.get("value"))
+
             else:
                 self.logger.warning("Unknown configuration parameter: %s", msg.get("param"))
 

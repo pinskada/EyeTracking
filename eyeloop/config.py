@@ -28,6 +28,7 @@ response_queue: mp.Queue
 
 eye_ready_signal: MpEvent
 tracker_shm_is_closed_signal: MpEvent
+tracker_running_signal: MpEvent
 
 preview = 0
 current_frame_id: int

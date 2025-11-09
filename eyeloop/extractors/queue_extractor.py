@@ -18,7 +18,7 @@ class QueueExtractor:
 
     def activate(self):
         """Activate the QueueExtractor."""
-        self.logger.info("Service activated.")
+        #self.logger.info("Service activated.")
 
 
     def fetch(self, core):
@@ -27,7 +27,7 @@ class QueueExtractor:
 
             # Signal to FrameProvider to fetch the next frame
             self.eye_ready_signal.set()
-            self.logger.info("eye_ready_s set.")
+            #self.logger.info("eye_ready_s set.")
 
 
             # Create message with tracking data
@@ -39,7 +39,7 @@ class QueueExtractor:
 
             # Send tracking data message via response queue
             self.response_queue.put(tracking_data_message)
-            self.logger.info("response_queue: tracking_data sent.")
+            #self.logger.info("Tracker data for %s eye sent with ID: %s.", self.side, config.current_frame_id)
 
             if config.preview:
 
@@ -62,7 +62,7 @@ class QueueExtractor:
 
                 # Send image preview message via response queue
                 self.response_queue.put(preview_image_message)
-                self.logger.info("response_queue: preview_image sent.")
+                #self.logger.info("Tracker preview for %s eye sent with ID: %s.", self.side, config.current_frame_id)
 
 
     def __name__(self):

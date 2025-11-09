@@ -98,7 +98,7 @@ class Engine:
         config.graphical_user_interface.arm(width, height)
         self.center = (width//2, height//2)
 
-        read_pupil_parameters(self.side)
+        #read_pupil_parameters(self.side)
 
         self.iterate(image)
 
@@ -107,58 +107,59 @@ class Engine:
             self.blink_sampled = lambda _:None
             #logger.info("(success) blink calibration loaded")
 
-        if not config.arguments.clear or config.arguments.params != "":
+        # if not config.arguments.clear or config.arguments.params != "":
 
-            try:
-                if config.arguments.params != "":
-                    latest_params = max(glob.glob(config.arguments.params), key=os.path.getctime)
+            # try:
+            #     if config.arguments.params != "":
+            #         latest_params = max(glob.glob(config.arguments.params), key=os.path.getctime)
 
-                    print(config.arguments.params + " loaded")
+            #         print(config.arguments.params + " loaded")
 
-                else:
-                    latest_params = max(glob.glob(PARAMS_DIR + "/*.npy"), key=os.path.getctime)
+            #     else:
+            #         latest_params = max(glob.glob(PARAMS_DIR + "/*.npy"), key=os.path.getctime)
 
-                params_ = np.load(latest_params, allow_pickle=True).tolist()
+            #     params_ = np.load(latest_params, allow_pickle=True).tolist()
 
-                self.pupil_processor.binarythreshold = params_["pupil"][0]
-                self.pupil_processor.blur = params_["pupil"][1]
+            #     self.pupil_processor.binarythreshold = params_["pupil"][0]
+            #     self.pupil_processor.blur = params_["pupil"][1]
 
-                self.cr_processor_1.binarythreshold = params_["cr1"][0]
-                self.cr_processor_1.blur = params_["cr1"][1]
+            #     self.cr_processor_1.binarythreshold = params_["cr1"][0]
+            #     self.cr_processor_1.blur = params_["cr1"][1]
 
-                self.cr_processor_2.binarythreshold = params_["cr2"][0]
-                self.cr_processor_2.blur = params_["cr2"][1]
+            #     self.cr_processor_2.binarythreshold = params_["cr2"][0]
+            #     self.cr_processor_2.blur = params_["cr2"][1]
 
-                print("(!) Parameters reloaded. Run --clear 1 to prevent this.")
+            #     print("(!) Parameters reloaded. Run --clear 1 to prevent this.")
 
 
-                param_dict = {
-                    "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
-                    "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
-                    "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur],
-                }
+            #     param_dict = {
+            #         "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
+            #         "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
+            #         "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur],
+            #     }
 
-                #logger.info(f"loaded parameters:\n{param_dict}")
+            #     #logger.info(f"loaded parameters:\n{param_dict}")
 
-                return
+            #     return
 
-            except:
-                print("(!) Failed to load parameters.")
+            # except:
+            #     print("(!) Failed to load parameters.")
 
 
         filtered_image = image[np.logical_and((image < 220), (image > 30))]
-        self.pupil_processor.binarythreshold = (
-            np.min(filtered_image) * 1 +
-            np.median(filtered_image) * .1
-        )#+ 50
-        self.cr_processor_1.binarythreshold = self.cr_processor_2.binarythreshold = (
-            float(np.min(filtered_image)) * .7 + 150)
+        self.logger.info("filtered_image mean value: %s", np.mean(filtered_image))
+        # self.pupil_processor.binarythreshold = (
+        #     np.min(filtered_image) * 1 +
+        #     np.median(filtered_image) * .1
+        # )#+ 50
+        # self.cr_processor_1.binarythreshold = self.cr_processor_2.binarythreshold = (
+        #     float(np.min(filtered_image)) * .7 + 150)
 
-        param_dict = {
-        "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
-        "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
-        "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
-        }
+        # param_dict = {
+        # "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
+        # "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
+        # "cr2" : [self.cr_processor_2.binarythreshold, self.cr_processor_2.blur]
+        # }
 
         #logger.info(f"loaded parameters:\n{param_dict}")
 
@@ -171,7 +172,7 @@ class Engine:
                 print(f"calibrating blink detector "
                     f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
         else:
-            logger.info("(success) blink detection calibrated")
+            self.logger.info("(success) blink detection calibrated")
             path = f"{config.file_manager.new_folderpath}/blinkcalibration_.npy"
             np.save(path, config.blink)
             print("blink calibration file saved")
@@ -188,7 +189,7 @@ class Engine:
         """
 
         mean_img = np.mean(img)
-        print(f"Mean: {mean_img}")
+        #print(f"Mean: {mean_img}")
         try:
 
             config.blink[config.blink_i] = mean_img
@@ -244,7 +245,7 @@ class Engine:
         Releases/deactivates all running process, i.e., importers, extractors.
         """
 
-        save_pupil_parameters(self.side)
+        #save_pupil_parameters(self.side)
 
         try:
             config.graphical_user_interface.out.release()

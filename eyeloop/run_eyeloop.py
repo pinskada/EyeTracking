@@ -10,7 +10,6 @@ from eyeloop.extractors.queue_extractor import QueueExtractor
 from eyeloop.guis.minimum.minimum_gui import GUI as Minimum_GUI
 from eyeloop.utilities.argument_parser import Arguments
 from eyeloop.utilities.file_manager import File_Manager
-from eyeloop.utilities.shared_logging import setup_logging
 from eyeloop.importers.shared_memory_importer import Importer
 from vr_core.utilities.logger_setup import setup_logger
 
@@ -34,6 +33,7 @@ class EyeLoop:
         response_queue: mp.Queue,
         eye_ready_signal: MpEvent,
         tracker_shm_is_closed_signal: MpEvent,
+        tracker_running_signal: MpEvent,
         logger=None,
     ):
         """Initialize EyeLoop with the specified configuration."""
@@ -44,13 +44,14 @@ class EyeLoop:
             eye_ready_signal is None or
             tracker_shm_is_closed_signal is None
         ):
-            print("(!) No queues provided. Creating empty Queues.")
+            print("(!) No queues provided, aborting.")
             return
         else:
             config.command_queue = command_queue
             config.response_queue = response_queue
             config.eye_ready_signal = eye_ready_signal
             config.tracker_shm_is_closed_signal = tracker_shm_is_closed_signal
+            config.tracker_running_signal = tracker_running_signal
 
         config.arguments = Arguments(args)
         config.file_manager = File_Manager(
@@ -58,13 +59,7 @@ class EyeLoop:
             img_format=config.arguments.img_format
         )
 
-        if logger is None:
-            logger, _ = setup_logging(
-                log_dir=str(config.file_manager.new_folderpath),
-                module_name="run_eyeloop"
-            )
-
-        self.logger.info("Service initialized.")
+        #self.logger.info("Service initialized.")
 
         self.run()
 

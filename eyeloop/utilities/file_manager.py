@@ -28,7 +28,7 @@ class File_Manager:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         self.new_folderpath: Union[Path, str] = self.output_root / f"trial_{timestamp}"
         self.new_folderpath.mkdir(exist_ok=True)
-        print(f"Outputting data to {self.new_folderpath}")
+        #print(f"Outputting data to {self.new_folderpath}")
 
     def save_image(self, image: np.ndarray, frame: int) -> None:
         """

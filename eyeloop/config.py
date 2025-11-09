@@ -23,12 +23,12 @@ arguments: Arguments
 file_manager: File_Manager
 graphical_user_interface: GUI
 
-command_queue: mp.Queue
-response_queue: mp.Queue
+tracker_cmd_q: mp.Queue
+tracker_response_q: mp.Queue
 
 eye_ready_signal: MpEvent
-tracker_shm_is_closed_signal: MpEvent
-tracker_running_signal: MpEvent
+tracker_shm_is_closed_s: MpEvent
+tracker_running_s: MpEvent
 
 preview = 0
 current_frame_id: int

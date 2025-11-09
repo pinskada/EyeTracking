@@ -11,7 +11,7 @@ class QueueExtractor:
 
     def __init__(self):
         self.logger = setup_logger(f"{config.arguments.side} QueueExtractor")
-        self.response_queue = config.response_queue
+        self.tracker_response_q = config.tracker_response_q
         self.side = config.arguments.side
         self.eye_ready_signal = config.eye_ready_signal
 
@@ -38,8 +38,9 @@ class QueueExtractor:
             }
 
             # Send tracking data message via response queue
-            self.response_queue.put(tracking_data_message)
-            #self.logger.info("Tracker data for %s eye sent with ID: %s.", self.side, config.current_frame_id)
+            self.tracker_response_q.put(tracking_data_message)
+            #self.logger.info("Tracker data for %s eye sent with ID: %s.",
+            #   self.side, config.current_frame_id)
 
             if config.preview:
 
@@ -61,8 +62,9 @@ class QueueExtractor:
                 }
 
                 # Send image preview message via response queue
-                self.response_queue.put(preview_image_message)
-                #self.logger.info("Tracker preview for %s eye sent with ID: %s.", self.side, config.current_frame_id)
+                self.tracker_response_q.put(preview_image_message)
+                #self.logger.info("Tracker preview for %s eye sent with ID: %s.",
+                #   self.side, config.current_frame_id)
 
 
     def __name__(self):

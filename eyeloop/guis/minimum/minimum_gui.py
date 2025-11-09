@@ -19,8 +19,8 @@ class GUI:
         dir_path = os.path.dirname(os.path.realpath(__file__))
         tool_tip_dict = ["tip_1_cr", "tip_2_cr", "tip_3_pupil", "tip_4_pupil", "tip_5_start", "tip_1_cr_error", "",
                          "tip_3_pupil_error"]
-        self.first_tool_tip = cv2.imread("{}/graphics/{}.png".format(dir_path, "tip_1_cr_first"), 0)
-        self.tool_tips = [cv2.imread("{}/graphics/{}.png".format(dir_path, tip), 0) for tip in tool_tip_dict]
+        #self.first_tool_tip = cv2.imread("{}/graphics/{}.png".format(dir_path, "tip_1_cr_first"), 0)
+        #self.tool_tips = [cv2.imread("{}/graphics/{}.png".format(dir_path, tip), 0) for tip in tool_tip_dict]
 
         self.dx = 0
         self.dy = 0
@@ -86,7 +86,7 @@ class GUI:
 
         if self.inquiry == "track":
             if "y" == key:
-                print("Initiating tracking..")
+                #print("Initiating tracking..")
                 self.remove_mousecallback()
                 #cv2.destroyWindow("CONFIGURATION")
                 #cv2.destroyWindow("BINARY")
@@ -426,7 +426,7 @@ class GUI:
                 self.locked = True
                 self.inquiry = "track"
 
-                print("Initiating tracking..")
+                #print("Initiating tracking..")
                 self.remove_mousecallback()
                 #cv2.destroyWindow("CONFIGURATION")
                 #cv2.destroyWindow("BINARY")

@@ -16,10 +16,9 @@ class Importer():
     def __init__(self) -> None:
         """Initialize the Shared Memory Importer."""
 
-        self.logger = setup_logger(f"{config.arguments.side} EyeLoop_Importer")
+        self.logger = setup_logger("EyeLoop_Importer")
         self.scale = config.arguments.scale
 
-        # Wait for init command via command_queue
         self.shared_memory_name = config.arguments.sharedmem
         self.side = config.arguments.side
         self.frame_shape: tuple[int, int]
@@ -27,12 +26,12 @@ class Importer():
         self.frame = None
         self.print_status = False
 
-        self.command_queue = config.command_queue
-        self.tracker_shm_is_closed_signal = config.tracker_shm_is_closed_signal
-        self.tracker_running_signal = config.tracker_running_signal
+        self.tracker_cmd_q = config.tracker_cmd_q
+        self.tracker_shm_is_closed_s = config.tracker_shm_is_closed_s
+        self.tracker_running_s = config.tracker_running_s
 
-        self.tracker_shm_is_closed_signal.set()
-        #self.logger.info("tracker_shm_is_closed_s set.")
+        self.tracker_shm_is_closed_s.set()
+        self.logger.info("<%s> tracker_shm_is_closed_s set.", self.side)
 
         self.set_stop_event = Event()
         self.new_frame_event = Event()
@@ -43,18 +42,24 @@ class Importer():
     def route(self) -> None:
         """Start routing frames from shared memory to the engine."""
 
-        self.tracker_running_signal.set()
+        loop_number = 0
+        self.tracker_running_s.set()
+        self.logger.info("<%s> tracker_running_s is set.", self.side)
         while True:
+            loop_number += 1
             self._load_cmd_queue_message()
             if (
                 # SHM has been set and new frame arrived
-                not self.tracker_shm_is_closed_signal.is_set() and 
+                not self.tracker_shm_is_closed_s.is_set() and
                 self.new_frame_event.is_set()
             ):
                 break
+            self.logger.info("<%s> %d. loop proceeded without new frame or tracker_shm.",
+                self.side, loop_number)
 
+        self.logger.info("<%s> First frame received, proceeding to arm engine.", self.side)
         self._first_frame()
-        self.logger.info("Starting routing.")
+        self.logger.info("<%s> Starting routing.", self.side)
         self._proceed()
 
 
@@ -62,25 +67,31 @@ class Importer():
         """Loads a message from the command queue."""
 
         try:
-            msg = self.command_queue.get(timeout=timeout)
+            msg = self.tracker_cmd_q.get(timeout=timeout)
         except queue.Empty:
             return
 
         if msg.get("type") == "shm_connect":
+            self.logger.info("<%s> SHM connect command received.", self.side)
             self._connect_shm(msg)
         elif msg.get("type") == "shm_detach":
+            self.logger.info("<%s> SHM detach command received.", self.side)
             self._close_shm()
         elif msg.get("type") == "close":
+            self.logger.info("<%s> Close command received.", self.side)
             self.set_stop_event.set()
             #self.logger.info("set_stop_event set.")
             config.engine.release()
         elif msg.get("type") == "config":
+            self.logger.info("<%s> Config command received.", self.side)
             self._configure(msg)
         elif msg.get("type") == "frame_id":
-            config.current_frame_id = msg.get("value")
+            frame_id = msg.get("value")
+            self.logger.info("<%s> Received ID: %d", self.side, frame_id)
+            config.current_frame_id = frame_id
             self.new_frame_event.set()
         else:
-            self.logger.warning("Unknown command: %s", msg.get("type"))
+            self.logger.warning("<%s> Unknown command: %s", self.side, msg.get("type"))
 
 
     def _first_frame(self) -> None:
@@ -89,10 +100,10 @@ class Importer():
         try:
             frame = self._get_frame()
         except Exception as e:  # pylint: disable=broad-except
-            self.logger.error("Error in first frame processing: %s", e)
+            self.logger.error("<%s> Error in first frame processing: %s", self.side, e)
             return
 
-        self.logger.info("Arming the engine...")
+        self.logger.info("<%s> Arming the engine...", self.side)
         config.engine.arm(
             height=self.frame_shape[0],
             width=self.frame_shape[1],
@@ -109,19 +120,19 @@ class Importer():
     def _proceed(self) -> None:
         """Main loop to route frames from shared memory to the engine."""
 
-        self.logger.info("Entering _proceed loop.")
+        self.logger.info("<%s> Entering _proceed loop.", self.side)
         while not self.set_stop_event.is_set():
 
             # Check for new commands
             self._load_cmd_queue_message()
 
             # Skip processing if shared memory is closed
-            if self.tracker_shm_is_closed_signal.is_set():
+            if self.tracker_shm_is_closed_s.is_set():
                 continue
 
             # print status every 50 frames
             if config.current_frame_id % 50 == 0 and self.print_status:
-                self.logger.info("Current frame ID: %d", config.current_frame_id)
+                self.logger.info("<%s> Current frame ID: %d", self.side, config.current_frame_id)
 
             # Skip if no new frame is yet available
             if self.new_frame_event.is_set():
@@ -139,8 +150,8 @@ class Importer():
             if  msg.get("param") == "threshold":
                 thr = msg.get("value")
                 config.engine.pupil_processor.binarythreshold = thr
-                self.logger.info("Threshold decreased to %d",
-                    thr
+                self.logger.info("<%s> Threshold decreased to %d",
+                    self.side, thr
                 )
 
             elif msg.get("param") == "blur_size":
@@ -150,35 +161,36 @@ class Importer():
                     blur += 1
 
                 config.engine.pupil_processor.blur = (blur, blur)
-                self.logger.info("Blur decreased to %s.",
-                    blur
+                self.logger.info("<%s> Blur decreased to %s.",
+                    self.side, blur
                 )
 
             elif msg.get("param") == "auto_search":
                 config.arguments.auto_search = msg.get("value")
-                self.logger.info("auto_search set to %d", msg.get("value"))
+                self.logger.info("<%s> auto_search set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "min_radius":
                 config.engine.pupil_processor.min_radius = msg.get("value")
-                self.logger.info("minR set to %d", msg.get("value"))
+                self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "max_radius":
                 config.engine.pupil_processor.max_radius = msg.get("value")
-                self.logger.info("maxR set to %d", msg.get("value"))
+                self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "search_step":
                 config.arguments.search_step = msg.get("value")
-                self.logger.info("search step set to %d", msg.get("value"))
+                self.logger.info("<%s> search step set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "preview":
                 config.preview = msg.get("value")
-                self.logger.info("Preview set to %d", msg.get("value"))
+                self.logger.info("<%s> Preview set to %d", self.side, msg.get("value"))
 
             else:
-                self.logger.warning("Unknown configuration parameter: %s", msg.get("param"))
+                self.logger.warning("<%s> Unknown configuration parameter: %s",
+                    self.side, msg.get("param"))
 
         except (TypeError, ValueError, KeyError) as e:
-            self.logger.warning("Failed to apply config: %s", e)
+            self.logger.warning("<%s> Failed to apply config: %s", self.side, e)
 
 
     def _connect_shm(self, msg):
@@ -187,18 +199,18 @@ class Importer():
         self.frame_shape = tuple(msg["frame_shape"])
         self.frame_dtype = np.dtype(msg["frame_dtype"])
         self.shm = SharedMemory(name=self.shared_memory_name)
-        self.tracker_shm_is_closed_signal.clear()
-        self.logger.info("tracker_shm_is_closed_s is cleared.")
+        self.tracker_shm_is_closed_s.clear()
+        self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
 
 
     def _close_shm(self):
         """Close the shared memory segment."""
         try:
             self.shm.close()
-            self.tracker_shm_is_closed_signal.set()
-            self.logger.info("tracker_shm_is_closed_s is set.")
+            self.tracker_shm_is_closed_s.set()
+            self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
         except (FileNotFoundError, PermissionError, OSError, BufferError) as e:
-            self.logger.error("Error closing shared memory: %s", e)
+            self.logger.error("<%s> Error closing shared memory: %s", self.side, e)
 
 
     def release(self) -> None:

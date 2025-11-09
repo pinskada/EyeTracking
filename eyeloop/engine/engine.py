@@ -168,9 +168,10 @@ class Engine:
         """Calibrates blink detection based on sampled mean image intensity."""
 
         if t == 1:
-            if config.blink_i % 20 == 0:
-                print(f"calibrating blink detector "
-                    f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
+            pass
+            #if config.blink_i % 20 == 0:
+                # print(f"calibrating blink detector "
+                #     f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
         else:
             self.logger.info("(success) blink detection calibrated")
             path = f"{config.file_manager.new_folderpath}/blinkcalibration_.npy"

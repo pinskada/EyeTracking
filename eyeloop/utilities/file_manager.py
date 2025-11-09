@@ -37,16 +37,16 @@ class File_Manager:
         img_pth = Path(self.new_folderpath, self.img_format.replace("$", str(frame), 1))
         cv2.imwrite(str(img_pth), image)
 
-    def read_image(self, frame: int) -> np.ndarray:
-        """
-        Reads video sequence from the input folderpath.
-        Command-line argument -v [dir] sets this vid_path.
-        """
+    # def read_image(self, frame: int) -> np.ndarray:
+    #     """
+    #     Reads video sequence from the input folderpath.
+    #     Command-line argument -v [dir] sets this vid_path.
+    #     """
 
-        img_pth = Path(self.input_folderpath, self.img_format.replace("$", str(frame), 1))
-        image=cv2.imread(str(img_pth))
+    #     img_pth = Path(self.input_folderpath, self.img_format.replace("$", str(frame), 1))
+    #     image=cv2.imread(str(img_pth))
 
-        if image is None:
-            raise ValueError("No more frames.")
+    #     if image is None:
+    #         raise ValueError("No more frames.")
 
-        return np.array(image)
+    #     return np.array(image)

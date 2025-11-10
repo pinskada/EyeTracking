@@ -9,12 +9,13 @@ import cv2
 import eyeloop.config as config
 from eyeloop.constants.minimum_gui_constants import *
 from eyeloop.utilities.general_operations import to_int, tuple_int
-
+from vr_core.utilities.logger_setup import setup_logger
 
 class GUI:
     """Minimum GUI for Eyeloop module."""
     def __init__(self) -> None:
 
+        self.logger = setup_logger("Eyeloop GUI")
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         tool_tip_dict = ["tip_1_cr", "tip_2_cr", "tip_3_pupil", "tip_4_pupil", "tip_5_start", "tip_1_cr_error", "",
@@ -411,10 +412,12 @@ class GUI:
         If not, it calls center_offset_generater() to adjust the cursor value.
         """
 
+        self.logger.info("<%s> attempting to lock pupil", config.arguments.side)
+
         try:
             # If sucessful, tracking is initiated
             if self.pupil_processor.fit_model.params[1] > config.arguments.min_radius_threshold and self.pupil_processor.fit_model.params[1] < config.arguments.max_radius_threshold:
-
+                self.logger.info("<%s> pupil is locked.", config.arguments.side)
                 param_dict = {
                     "pupil" : [self.pupil_processor.binarythreshold, self.pupil_processor.blur],
                     "cr1" : [self.cr_processor_1.binarythreshold, self.cr_processor_1.blur],
@@ -443,6 +446,7 @@ class GUI:
                 return
             else:
                 # If not sucessful, cursor adjustment is made
+                self.logger.info("<%s> pupil is not locked, attempting to lock.", config.arguments.side)
                 self.center_offset_generator()
 
         except:
@@ -486,6 +490,8 @@ class GUI:
         # Assing a new value to cursor
         self.cursor = (self.centre[0] + self.dx, self.centre[1] + self.dy)
 
+        self.logger.info("<%s> cursor new value: %s", config.arguments.side, self.cursor)
+
         # Return if cursor is beyond window
         if self.cursor[0] > self.binary_width | self.cursor[1] > self.binary_height:
             print("No pupil find, exiting.")
@@ -501,3 +507,5 @@ class GUI:
 
         # Increase cycle count for next search
         self.cycle += 1
+
+        #self.pupil_processor.reset(self.cursor)

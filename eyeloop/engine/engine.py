@@ -146,8 +146,8 @@ class Engine:
             #     print("(!) Failed to load parameters.")
 
 
-        filtered_image = image[np.logical_and((image < 220), (image > 30))]
-        self.logger.info("filtered_image mean value: %s", np.mean(filtered_image))
+        #filtered_image = image[np.logical_and((image < 220), (image > 30))]
+        #self.logger.info("filtered_image mean value: %s", np.mean(filtered_image))
         # self.pupil_processor.binarythreshold = (
         #     np.min(filtered_image) * 1 +
         #     np.median(filtered_image) * .1

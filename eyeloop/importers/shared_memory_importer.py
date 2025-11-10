@@ -31,7 +31,7 @@ class Importer():
         self.tracker_running_s = config.tracker_running_s
 
         self.tracker_shm_is_closed_s.set()
-        self.logger.info("<%s> tracker_shm_is_closed_s set.", self.side)
+        # self.logger.info("<%s> tracker_shm_is_closed_s set.", self.side)
 
         self.set_stop_event = Event()
         self.new_frame_event = Event()
@@ -44,7 +44,7 @@ class Importer():
 
         loop_number = 0
         self.tracker_running_s.set()
-        self.logger.info("<%s> tracker_running_s is set.", self.side)
+        # self.logger.info("<%s> tracker_running_s is set.", self.side)
         while True:
             loop_number += 1
             self._load_cmd_queue_message()
@@ -54,10 +54,10 @@ class Importer():
                 self.new_frame_event.is_set()
             ):
                 break
-            self.logger.info("<%s> %d. loop proceeded without new frame or tracker_shm.",
-                self.side, loop_number)
+            # self.logger.info("<%s> %d. loop proceeded without new frame or tracker_shm.",
+            #     self.side, loop_number)
 
-        self.logger.info("<%s> First frame received, proceeding to arm engine.", self.side)
+        # self.logger.info("<%s> First frame received, proceeding to arm engine.", self.side)
         self._first_frame()
         self.logger.info("<%s> Starting routing.", self.side)
         self._proceed()
@@ -72,18 +72,18 @@ class Importer():
             return
 
         if msg.get("type") == "shm_connect":
-            self.logger.info("<%s> SHM connect command received.", self.side)
+            # self.logger.info("<%s> SHM connect command received.", self.side)
             self._connect_shm(msg)
         elif msg.get("type") == "shm_detach":
-            self.logger.info("<%s> SHM detach command received.", self.side)
+            # self.logger.info("<%s> SHM detach command received.", self.side)
             self._close_shm()
         elif msg.get("type") == "close":
-            self.logger.info("<%s> Close command received.", self.side)
+            # self.logger.info("<%s> Close command received.", self.side)
             self.set_stop_event.set()
             #self.logger.info("set_stop_event set.")
             config.engine.release()
         elif msg.get("type") == "config":
-            self.logger.info("<%s> Config command received.", self.side)
+            # self.logger.info("<%s> Config command received.", self.side)
             self._configure(msg)
         elif msg.get("type") == "frame_id":
             frame_id = msg.get("value")
@@ -103,7 +103,7 @@ class Importer():
             self.logger.error("<%s> Error in first frame processing: %s", self.side, e)
             return
 
-        self.logger.info("<%s> Arming the engine...", self.side)
+        # self.logger.info("<%s> Arming the engine...", self.side)
         config.engine.arm(
             height=self.frame_shape[0],
             width=self.frame_shape[1],
@@ -120,7 +120,7 @@ class Importer():
     def _proceed(self) -> None:
         """Main loop to route frames from shared memory to the engine."""
 
-        self.logger.info("<%s> Entering _proceed loop.", self.side)
+        # self.logger.info("<%s> Entering _proceed loop.", self.side)
         while not self.set_stop_event.is_set():
 
             # Check for new commands
@@ -150,9 +150,9 @@ class Importer():
             if  msg.get("param") == "threshold":
                 thr = msg.get("value")
                 config.engine.pupil_processor.binarythreshold = thr
-                self.logger.info("<%s> Threshold decreased to %d",
-                    self.side, thr
-                )
+                # self.logger.info("<%s> Threshold decreased to %d",
+                #     self.side, thr
+                # )
 
             elif msg.get("param") == "blur_size":
                 blur = msg.get("value")
@@ -161,9 +161,9 @@ class Importer():
                     blur += 1
 
                 config.engine.pupil_processor.blur = (blur, blur)
-                self.logger.info("<%s> Blur decreased to %s.",
-                    self.side, blur
-                )
+                # self.logger.info("<%s> Blur decreased to %s.",
+                #     self.side, blur
+                # )
 
             elif msg.get("param") == "auto_search":
                 config.arguments.auto_search = msg.get("value")
@@ -171,19 +171,19 @@ class Importer():
 
             elif msg.get("param") == "min_radius":
                 config.engine.pupil_processor.min_radius = msg.get("value")
-                self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
+                # self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "max_radius":
                 config.engine.pupil_processor.max_radius = msg.get("value")
-                self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "search_step":
                 config.arguments.search_step = msg.get("value")
-                self.logger.info("<%s> search step set to %d", self.side, msg.get("value"))
+                # self.logger.info("<%s> search step set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "preview":
                 config.preview = msg.get("value")
-                self.logger.info("<%s> Preview set to %d", self.side, msg.get("value"))
+                # self.logger.info("<%s> Preview set to %d", self.side, msg.get("value"))
 
             else:
                 self.logger.warning("<%s> Unknown configuration parameter: %s",
@@ -200,7 +200,7 @@ class Importer():
         self.frame_dtype = np.dtype(msg["frame_dtype"])
         self.shm = SharedMemory(name=self.shared_memory_name)
         self.tracker_shm_is_closed_s.clear()
-        self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
+        # self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
 
 
     def _close_shm(self):
@@ -209,7 +209,7 @@ class Importer():
             try:
                 self.shm.close()
                 self.tracker_shm_is_closed_s.set()
-                self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
+                # self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
             except (FileNotFoundError, PermissionError, OSError, BufferError) as e:
                 self.logger.error("<%s> Error closing shared memory: %s", self.side, e)
 

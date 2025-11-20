@@ -33,6 +33,7 @@ class Arguments:
         self.save = None
         self.rotation = None
         self.fps = None
+        self.use_gui: int
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
@@ -117,6 +118,8 @@ class Arguments:
         parser.add_argument("-shm", "--sharedmem", default="", type=str,
                             help="Name of the shared memory segment "
                             "for inter-process communication.")
+        parser.add_argument("-ug", "--use_gui", default="0", type=int,
+                            help="Use graphical user interface (yes/no, 1/0; default = 0)")
 
         return parser.parse_args(args)
 
@@ -150,6 +153,7 @@ class Arguments:
         self.auto_search = parsed_args.auto_search
         self.tracker_fps = parsed_args.tracker_fps
         self.sharedmem = parsed_args.sharedmem
+        self.use_gui = parsed_args.use_gui
 
         #self.blink = parsed_args.blink
 
@@ -220,5 +224,8 @@ class Arguments:
                 elif parameter == "sharedmem":
                     print("sharedmem: ", parameter)
                     self.sharedmem = parameter
+                elif parameter == "use_gui":
+                    print("use_gui: ", parameter)
+                    self.use_gui = parameter
 
             print("")

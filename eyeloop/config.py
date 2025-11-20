@@ -32,3 +32,5 @@ tracker_running_s: MpEvent
 
 preview = 0
 current_frame_id: int
+
+use_gui: bool

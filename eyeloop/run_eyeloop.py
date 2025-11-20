@@ -34,24 +34,14 @@ class EyeLoop:
         eye_ready_signal: MpEvent,
         tracker_shm_is_closed_s: MpEvent,
         tracker_running_s: MpEvent,
-        logger=None,
     ):
         """Initialize EyeLoop with the specified configuration."""
 
-        self.logger = setup_logger("EyeLoop_Run")
-        if (tracker_cmd_q is None or
-            tracker_response_q is None or
-            eye_ready_signal is None or
-            tracker_shm_is_closed_s is None
-        ):
-            print("(!) No queues provided, aborting.")
-            return
-        else:
-            config.tracker_cmd_q = tracker_cmd_q
-            config.tracker_response_q = tracker_response_q
-            config.eye_ready_signal = eye_ready_signal
-            config.tracker_shm_is_closed_s = tracker_shm_is_closed_s
-            config.tracker_running_s = tracker_running_s
+        config.tracker_cmd_q = tracker_cmd_q
+        config.tracker_response_q = tracker_response_q
+        config.eye_ready_signal = eye_ready_signal
+        config.tracker_shm_is_closed_s = tracker_shm_is_closed_s
+        config.tracker_running_s = tracker_running_s
 
         config.arguments = Arguments(args)
         config.file_manager = File_Manager(
@@ -71,14 +61,11 @@ class EyeLoop:
         #except:
         #    print("\n(!) NO BLINK DETECTION. Run 'eyeloop --blink 1' to calibrate\n")
 
+        if config.arguments.use_gui == 1:
+            config.graphical_user_interface = Minimum_GUI()
 
-        config.graphical_user_interface = Minimum_GUI()
-
-        config.engine = Engine(self)
-
-        extractors = [QueueExtractor()]
-
-        config.engine.load_extractors(extractors)
+        extractor = QueueExtractor()
+        config.engine = Engine(self, extractor)
 
         self.run_importer()
 

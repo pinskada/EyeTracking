@@ -11,7 +11,7 @@ from eyeloop.utilities.file_manager import File_Manager
 from eyeloop.guis.minimum.minimum_gui import GUI
 from eyeloop.importers.importer import IMPORTER
 
-blink = np.zeros(300, dtype=np.float64)
+blink = np.zeros(30, dtype=np.float64)
 
 blink_i = 0
 

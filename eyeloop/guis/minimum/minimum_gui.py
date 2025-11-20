@@ -94,7 +94,7 @@ class GUI:
 
     def pupil(self, source_rgb):
         try:
-            pupil_center, pupil_width, pupil_height, pupil_angle = self.pupil_processor.fit_model.params
+            pupil_center, pupil_width, pupil_height, pupil_angle = config.engine.dataout["pupil"]
             #self.logger.info("pupil radius: %s", pupil_width)
             cv2.ellipse(source_rgb, tuple_int(pupil_center), tuple_int((pupil_width, pupil_height)), pupil_angle, 0, 360, red, 1)
             self.place_cross(source_rgb, pupil_center, red)

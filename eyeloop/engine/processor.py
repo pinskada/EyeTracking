@@ -1,4 +1,8 @@
+# ruff: noqa: F403, F405
+
 """Processor module for eye features (pupil, corneal reflection)."""
+
+import collections
 
 import numpy as np
 import cv2
@@ -7,7 +11,6 @@ import eyeloop.config as config
 from eyeloop.constants.processor_constants import *
 from eyeloop.engine.models.circular import Circle
 from eyeloop.engine.models.ellipsoid import Ellipse
-from eyeloop.utilities.general_operations import to_int, tuple_int
 from vr_core.utilities.logger_setup import setup_logger
 
 
@@ -29,9 +32,14 @@ class Shape():
         self.active = False
         self.center = -1
 
-        self.walkout_offset = 0
+        radius_buffer_size = 30
+        self.radius_drop_factor = 0.85
 
-        self.last_walkout_points = 0
+        self.radius_buffer = collections.deque(maxlen=radius_buffer_size)
+        self.filtered_radius = None
+        self.filtered_center = None
+
+        self.walkout_offset = 0
 
         self.binarythreshold = -1
         self.blur = (3, 3)
@@ -52,8 +60,63 @@ class Shape():
 
             self.min_radius = 2
             self.max_radius = 100 #change according to video size or argument
+            self.last_min_radius = self.min_radius
 
-        self.threshold = len(crop_stock) * self.min_radius *1.05
+        self.logger.info("Min_radius = %s", self.min_radius)
+        self.compute_threshold()
+
+
+    def compute_threshold(self) -> None:
+        """Computes the threshold for pupil detection based on min_radius."""
+        self.threshold = len(crop_stock) * self.min_radius * 1.05
+
+
+    def track(self, source):
+        if self.last_min_radius != self.min_radius:
+            self.compute_threshold()
+            self.last_min_radius = self.min_radius
+
+        self.raw = source
+        self.source = source.copy()
+
+        # Performs a simple binarization and applies a smoothing gaussian kernel.
+        self.pupil_thresh() #either pupil or cr
+
+        mean_img = np.mean(self.source)
+
+        try:
+            config.blink[config.blink_i] = mean_img
+            config.blink_i += 1
+            self.blink_sampled(1)
+
+        except IndexError:
+            self.blink_sampled(0)
+            self.blink_sampled = lambda _: None
+            config.blink_i = 0
+
+        baseline = np.mean(config.blink[np.nonzero(config.blink)])
+        self.dataout = {}
+        diff = np.abs(mean_img - baseline)
+
+        # self.logger.info("Mean image intensity: %.2f, baseline: %.2f, diff: %.2f", mean_img, baseline, diff)
+
+        if diff > 1:
+            config.engine.dataout[self.type_entry] = self.fit_model.params
+            self.logger.info("Blink detected.")
+            return
+
+        self.fit() #gets fit model
+
+
+    def blink_sampled(self, t: int = 1):
+        """Calibrates blink detection based on sampled mean image intensity."""
+
+        if t == 1:
+            if config.blink_i % 20 == 0:
+                print(f"calibrating blink detector "
+                    f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
+        else:
+            self.logger.info("(success) blink detection calibrated")
 
 
     def pupil_thresh(self):
@@ -65,106 +128,63 @@ class Shape():
         )[1]
 
 
-    def reset(self, center):
-        self.logger.info("Resetting processor with center: %s", center)
-        self.active = True
-        self.margin = 0
-        self.walkout_offset = 0
-        self.center = center
-
-        self.standard_corners = [(0, 0), (config.engine.width, config.engine.height)]
-
-        self.corners = self.standard_corners.copy()
-
-
-    def track(self, source):
-        self.raw = source
-        self.source = source.copy()
-
-        # Performs a simple binarization and applies a smoothing gaussian kernel.
-        self.pupil_thresh() #either pupil or cr
-        self.fit() #gets fit model
-
-
-    def center_adj(self):
-        #adjust settings:
-        # blurred = cv2.GaussianBlur(self.raw, (3, 3), 2)
-        circles = cv2.HoughCircles(self.raw, cv2.HOUGH_GRADIENT, 1.5, 10, param1=200, param2=15, minRadius=self.min_radius, maxRadius=self.max_radius)
-
-        if circles is None:
-            # self.logger.info("No circles found for center adjustment.")
-            return
-        else:
-            smallest = -1
-            current = -1
-
-            if self.center == -1:
-                center = (self.raw.shape[1]//2, self.raw.shape[0]//2)
-                self.reset(center)
-
-            for circle in circles[0, :]:
-                score = (
-                    self.distance(circle[:2], self.center) +
-                    np.mean(
-                        self.raw[int(circle[1])-self.min_radius:int(circle[1])+self.min_radius,
-                                 int(circle[0]-self.min_radius):int(circle[0]+self.min_radius)]
-                        ))
-
-                self.raw[int(circle[1]), int(circle[0])] = 100
-                # cv2.imshow("kk", self.raw)
-                # cv2.waitKey(0)
-                if smallest == -1:
-                    smallest = score
-                    current = circle[:2]
-                elif score < smallest:
-                    smallest = score
-                    current = circle[:2]
-
-            self.center = tuple(current)
-            # self.logger.info("Image shape: %s; Found center: %s", self.raw.shape, self.center)
-
-
-    def distance(self, a, b):
-        return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
-
-
-    def artefact_(self, params):
-        cv2.circle(config.engine.pup_source, tuple_int(params[0]), to_int(params[1] * self.expand), black, -1)
-
-
     def fit(self):
         try:
             r = self.pupil_walkout()
 
             self.center = self.fit_model.fit(r)
-            #self.logger.info(params[1])
-            #self.logger.info(self.last_walkout_points)
+            raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+            # self.radius_filter()
 
             config.engine.dataout[self.type_entry] = self.fit_model.params
 
+            if config.arguments.side == "Right":
+                self.logger.info("raw=%.3f filtered=%.3f", raw_r, self.fit_model.params[1])
+
         except IndexError:
-            self.logger.info("Fit index error")
+            # self.logger.info("Fit index error")
             self.center_adj()
 
         except Exception as e:
-            self.logger.info(f"Fit-func error: {e}")
+            # self.logger.info(f"Fit-func error: {e}")
             self.center_adj()
 
 
-    def cond(self, r, crop_list):
-        dists =  np.linalg.norm(np.mean(r,  axis = 0,dtype=np.float64) - r, axis = 1)
+    def radius_filter(self) -> None:
+        """Filters the radius to avoid sudden jumps."""
+        cxcy, rx, ry, ang = self.fit_model.params
+        new_radius = (rx + ry) / 2.0
+        filtered_center = cxcy
 
-        mean_ = np.mean(dists)
-        std_ = np.std(dists)
+        self.radius_buffer.append(new_radius)
 
-        lower, upper = mean_ - std_, mean_ + std_ * .8
-        cond_ = np.logical_and(np.greater_equal(dists, lower), np.less(dists, upper))
+        # If we have at least 3 previous samples, compare against their mean
+        if len(self.radius_buffer) > 3:
+            # Mean of previous radii (exclude the newest one)
+            prev_radii = list(self.radius_buffer)[:-1]
+            mean_radius = float(np.mean(prev_radii))
 
-        return r[cond_]
+            if new_radius < mean_radius * self.radius_drop_factor:
+                # Suspiciously small radius: KEEP last filtered radius in the output
+                if self.filtered_radius is not None:
+                    filtered_r = self.filtered_radius
+                else:
+                    # First time we see a snap: fall back to mean of history
+                    filtered_r = mean_radius
 
+                # And also keep last valid center if we have one
+                if self.filtered_center is not None:
+                    filtered_center = self.filtered_center
+            else:
+                # Looks ok -> accept
+                filtered_r = new_radius
 
-    def clip(self, crop_list):
-        np.clip(crop_list, self.min_radius, self.max_radius, out = crop_list)
+        # Remember last accepted radius
+        self.filtered_radius = filtered_r
+        self.filtered_center = filtered_center
+
+        self.center = filtered_center
+        self.fit_model.params = (filtered_center, filtered_r, filtered_r, ang)
 
 
     def pupil_walkout(self):
@@ -229,7 +249,7 @@ class Shape():
             np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0)
         ], dtype=int) + self.min_radius
 
-        #self.logger.info("1. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
+        # self.logger.info("1. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
 
         #self.logger.info(crop_list)
 
@@ -283,10 +303,11 @@ class Shape():
             np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[30]:] == 0), np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[31]:] == 0)
             ], dtype=int) + offset_list
 
-            #self.logger.info("2. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
+            # self.logger.info("2. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
 
             if np.sum(crop_list) < self.threshold:
-                raise IndexError(f"[WARN] [Processor {self.side}]: Lost track, do reset")
+                # self.logger.warning("Pupil walkout failed: insufficient edge points found.")
+                raise IndexError
 
         r[:8,:] = center
         r[ry_add, 1] += crop_list[ry_add]
@@ -297,5 +318,57 @@ class Shape():
         r[ry_multiplied, 1] *= ry_multiply
         r[8:,:] += center
 
-        self.last_walkout_points = len(r)
         return self.cond(r, crop_list)
+
+
+    def cond(self, r, crop_list):
+        dists =  np.linalg.norm(np.mean(r,  axis = 0,dtype=np.float64) - r, axis = 1)
+
+        mean_ = np.mean(dists)
+        std_ = np.std(dists)
+
+        lower, upper = mean_ - std_, mean_ + std_ * .8
+        cond_ = np.logical_and(np.greater_equal(dists, lower), np.less(dists, upper))
+
+        return r[cond_]
+
+
+    def center_adj(self):
+        #adjust settings:
+        # blurred = cv2.GaussianBlur(self.raw, (3, 3), 2)
+        circles = cv2.HoughCircles(self.raw, cv2.HOUGH_GRADIENT, 1.5, 10, param1=200, param2=15, minRadius=self.min_radius, maxRadius=self.max_radius)
+
+        if circles is None:
+            # self.logger.info("No circles found for center adjustment.")
+            return
+        else:
+            smallest = -1
+            current = -1
+
+            if self.center == -1:
+                self.center = (self.raw.shape[1]//2, self.raw.shape[0]//2)
+
+            for circle in circles[0, :]:
+                score = (
+                    self.distance(circle[:2], self.center) +
+                    np.mean(
+                        self.raw[int(circle[1])-self.min_radius:int(circle[1])+self.min_radius,
+                                 int(circle[0]-self.min_radius):int(circle[0]+self.min_radius)]
+                        ))
+
+                self.raw[int(circle[1]), int(circle[0])] = 100
+                # cv2.imshow("kk", self.raw)
+                # cv2.waitKey(0)
+                if smallest == -1:
+                    smallest = score
+                    current = circle[:2]
+                elif score < smallest:
+                    smallest = score
+                    current = circle[:2]
+
+            self.center = tuple(current)
+            self.logger.info("Image shape: %s; Found center: %s", self.raw.shape, self.center)
+
+
+    def distance(self, a, b):
+        return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)

@@ -48,7 +48,7 @@ class QueueExtractor:
                 # Create message with image preview data
                 self.print_state += 1
                 image_preview = config.engine.pupil_processor.source
-        
+
                 # mean_image = np.mean(image_preview)
                 # self.logger.info("Mean image value: %s", mean_image)
                 # if config.preview and self.print_state % 50 == 0:

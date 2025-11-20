@@ -138,7 +138,7 @@ class Importer():
             if self.new_frame_event.is_set():
                 # Get frame from shared memory and iterate
                 frame = self._get_frame()
-                config.engine.iterate(frame)
+                config.engine.track(frame)
                 self.new_frame_event.clear()
                 #self.logger.info("new_frame_event cleared.")
 

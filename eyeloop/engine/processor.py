@@ -101,8 +101,8 @@ class Shape():
         # self.logger.info("Mean image intensity: %.2f, baseline: %.2f, diff: %.2f", mean_img, baseline, diff)
 
         if diff > 1:
-            config.engine.dataout[self.type_entry] = self.fit_model.params
-            self.logger.info("Blink detected.")
+            config.engine.dataout[self.type_entry] = None
+            # self.logger.info("Blink detected.")
             return
 
         self.fit() #gets fit model
@@ -111,12 +111,12 @@ class Shape():
     def blink_sampled(self, t: int = 1):
         """Calibrates blink detection based on sampled mean image intensity."""
 
-        if t == 1:
-            if config.blink_i % 20 == 0:
-                print(f"calibrating blink detector "
-                    f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
-        else:
-            self.logger.info("(success) blink detection calibrated")
+        # if t == 1:
+        #     if config.blink_i % 20 == 0:
+        #         print(f"calibrating blink detector "
+        #             f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
+        # else:
+        #     self.logger.info("(success) blink detection calibrated")
 
 
     def pupil_thresh(self):
@@ -133,13 +133,18 @@ class Shape():
             r = self.pupil_walkout()
 
             self.center = self.fit_model.fit(r)
-            raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
-            # self.radius_filter()
+            # raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+            frame_valid = self.radius_filter()
 
-            config.engine.dataout[self.type_entry] = self.fit_model.params
+            if frame_valid:
+                # normal tracking output
+                config.engine.dataout[self.type_entry] = self.fit_model.params
+            else:
+                # snap: return empty output
+                config.engine.dataout[self.type_entry] = None
 
-            if config.arguments.side == "Right":
-                self.logger.info("raw=%.3f filtered=%.3f", raw_r, self.fit_model.params[1])
+            # if config.arguments.side == "Right":
+            #     self.logger.info("raw=%.3f filtered=%.3f", raw_r, self.fit_model.params[1])
 
         except IndexError:
             # self.logger.info("Fit index error")
@@ -150,13 +155,15 @@ class Shape():
             self.center_adj()
 
 
-    def radius_filter(self) -> None:
+    def radius_filter(self) -> bool:
         """Filters the radius to avoid sudden jumps."""
         cxcy, rx, ry, ang = self.fit_model.params
         new_radius = (rx + ry) / 2.0
         filtered_center = cxcy
 
         self.radius_buffer.append(new_radius)
+
+        is_snap = False
 
         # If we have at least 3 previous samples, compare against their mean
         if len(self.radius_buffer) > 3:
@@ -165,6 +172,8 @@ class Shape():
             mean_radius = float(np.mean(prev_radii))
 
             if new_radius < mean_radius * self.radius_drop_factor:
+                is_snap = True
+
                 # Suspiciously small radius: KEEP last filtered radius in the output
                 if self.filtered_radius is not None:
                     filtered_r = self.filtered_radius
@@ -185,6 +194,8 @@ class Shape():
 
         self.center = filtered_center
         self.fit_model.params = (filtered_center, filtered_r, filtered_r, ang)
+
+        return not is_snap
 
 
     def pupil_walkout(self):
@@ -367,7 +378,7 @@ class Shape():
                     current = circle[:2]
 
             self.center = tuple(current)
-            self.logger.info("Image shape: %s; Found center: %s", self.raw.shape, self.center)
+            # self.logger.info("Image shape: %s; Found center: %s", self.raw.shape, self.center)
 
 
     def distance(self, a, b):

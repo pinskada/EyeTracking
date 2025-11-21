@@ -32,8 +32,8 @@ class Shape():
         self.active = False
         self.center = -1
 
-        radius_buffer_size = 30
-        self.radius_drop_factor = 0.85
+        radius_buffer_size = 10
+        self.radius_drop_factor = 0.7
 
         self.radius_buffer = collections.deque(maxlen=radius_buffer_size)
         self.filtered_radius = None
@@ -100,10 +100,10 @@ class Shape():
 
         # self.logger.info("Mean image intensity: %.2f, baseline: %.2f, diff: %.2f", mean_img, baseline, diff)
 
-        if diff > 1:
-            config.engine.dataout[self.type_entry] = None
-            # self.logger.info("Blink detected.")
-            return
+        # if diff > 5:
+        #     config.engine.dataout[self.type_entry] = None
+        #     self.logger.info("Blink detected.")
+        #     return
 
         self.fit() #gets fit model
 
@@ -130,17 +130,18 @@ class Shape():
 
     def fit(self):
         try:
+            # self.logger.info("Fitting model for %s.", self.type_entry)
             r = self.pupil_walkout()
 
             self.center = self.fit_model.fit(r)
-            # raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+            raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
             frame_valid = self.radius_filter()
 
             if frame_valid:
                 # normal tracking output
                 config.engine.dataout[self.type_entry] = self.fit_model.params
             else:
-                # snap: return empty output
+            #     # snap: return empty output
                 config.engine.dataout[self.type_entry] = None
 
             # if config.arguments.side == "Right":
@@ -320,6 +321,9 @@ class Shape():
                 # self.logger.warning("Pupil walkout failed: insufficient edge points found.")
                 raise IndexError
 
+        radius = np.sum(crop_list) / (len(crop_stock) * 1.05)
+        # self.logger.info("Estimated pupil radius: %.2f", radius)
+
         r[:8,:] = center
         r[ry_add, 1] += crop_list[ry_add]
         r[rx_add, 0] += crop_list[rx_add]
@@ -366,8 +370,11 @@ class Shape():
                         self.raw[int(circle[1])-self.min_radius:int(circle[1])+self.min_radius,
                                  int(circle[0]-self.min_radius):int(circle[0]+self.min_radius)]
                         ))
-
-                self.raw[int(circle[1]), int(circle[0])] = 100
+                try:
+                    self.raw[int(circle[1]), int(circle[0])] = 100
+                except IndexError:
+                    self.logger.warning("Circle index error during center adjustment.")
+                    self.logger.warning("Raw shape: %s; center: %s", self.raw.shape, circle[:2])
                 # cv2.imshow("kk", self.raw)
                 # cv2.waitKey(0)
                 if smallest == -1:

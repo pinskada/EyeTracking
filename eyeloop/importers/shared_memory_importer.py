@@ -69,6 +69,7 @@ class Importer():
         try:
             msg = self.tracker_cmd_q.get(timeout=timeout)
         except queue.Empty:
+            # self.logger.info("tracker_cmd_q is empty.")
             return
 
         if msg.get("type") == "shm_connect":
@@ -87,7 +88,7 @@ class Importer():
             self._configure(msg)
         elif msg.get("type") == "frame_id":
             frame_id = msg.get("value")
-            #self.logger.info("<%s> Received ID: %d", self.side, frame_id)
+            # self.logger.info("<%s> Received ID: %d", self.side, frame_id)
             config.current_frame_id = frame_id
             self.new_frame_event.set()
         else:
@@ -200,7 +201,7 @@ class Importer():
         self.frame_dtype = np.dtype(msg["frame_dtype"])
         self.shm = SharedMemory(name=self.shared_memory_name)
         self.tracker_shm_is_closed_s.clear()
-        # self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
+        self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
 
 
     def _close_shm(self):
@@ -209,7 +210,7 @@ class Importer():
             try:
                 self.shm.close()
                 self.tracker_shm_is_closed_s.set()
-                # self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
+                self.logger.info("<%s> tracker_shm_is_closed_s is set.", self.side)
             except (FileNotFoundError, PermissionError, OSError, BufferError) as e:
                 self.logger.error("<%s> Error closing shared memory: %s", self.side, e)
 
@@ -217,5 +218,5 @@ class Importer():
     def release(self) -> None:
         """Release the importer and shared memory."""
 
-        self._close_shm()
+        #self._close_shm()
         #cv2.destroyAllWindows()

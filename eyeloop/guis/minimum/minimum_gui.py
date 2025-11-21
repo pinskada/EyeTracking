@@ -63,9 +63,9 @@ class GUI:
         self.bin_stock_txt_selected = self.bin_stock_txt.copy()
 
         if (self.side == "Right"):
-            x_shift = width + 20
+            x_shift = 350
         else:
-            x_shift = 0
+            x_shift = 25
 
         cv2.namedWindow(self.preview, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.binary, cv2.WINDOW_NORMAL)
@@ -73,11 +73,11 @@ class GUI:
         cv2.imshow(self.preview, np.hstack((self.bin_stock, self.bin_stock)))
         cv2.imshow(self.binary, np.vstack((self.bin_stock, self.bin_stock)))
 
-        cv2.resizeWindow(self.preview, self.width, self.height)
-        cv2.resizeWindow(self.binary, self.binary_width, self.binary_height)
+        cv2.resizeWindow(self.preview, 300, 450)
+        cv2.resizeWindow(self.binary, 300, 450)
 
-        cv2.moveWindow(self.preview, x_shift, 0)
-        cv2.moveWindow(self.binary, x_shift, self.height + 50)
+        cv2.moveWindow(self.preview, x_shift, 25)
+        cv2.moveWindow(self.binary, x_shift, 500)
 
 
     def place_cross(self, source: np.ndarray, point: tuple, color: tuple) -> None:

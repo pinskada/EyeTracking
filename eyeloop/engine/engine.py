@@ -1,8 +1,9 @@
 """Core engine for eyeloop eye-tracking module."""
 
-import numpy as np
-
+from typing import Any
+from numpy import diff
 import eyeloop.config as config
+# ruff: noqa F403
 from eyeloop.constants.engine_constants import *
 from eyeloop.engine.processor import Shape
 from vr_core.utilities.logger_setup import setup_logger
@@ -18,6 +19,8 @@ class Engine:
         self.extractor = extractor
         self.live = True  # Access this to check if Core is running.
 
+        self.process_blink = False
+
         self.eyeloop = eyeloop
         self.model = config.arguments.model  # Used for assigning appropriate circular model.
 
@@ -27,7 +30,11 @@ class Engine:
         self.center: tuple[int, int]
 
         self.pupil_processor = Shape()
+        self.cr_processor_1 = Shape(2)
+        # self.cr_processor_1 = None
 
+        # Initialize dataout attribute
+        self.dataout: dict[str, Any] = {}
 
     def arm(self, width, height, image) -> None:
         """Arms the engine with initial parameters and settings."""
@@ -51,50 +58,36 @@ class Engine:
         Fourth, pupil is detected.
         Finally, data is logged and extractors are run.
         """
-        # mean_img = np.mean(img)
+        if self.process_blink:
+            mean_img = np.mean(img)
 
-        # try:
-        #     config.blink[config.blink_i] = mean_img
-        #     config.blink_i += 1
-        #     self.blink_sampled(1)
+            try:
+                config.blink[config.blink_i] = mean_img
+                config.blink_i += 1
 
-        # except IndexError:
-        #     self.blink_sampled(0)
-        #     self.blink_sampled = lambda _: None
-        #     config.blink_i = 0
+            except IndexError:
 
-        # baseline = np.mean(config.blink[np.nonzero(config.blink)])
-        self.dataout = {}
-        # diff = np.abs(mean_img - baseline)
+                config.blink_i = 0
 
-        # if diff > 3:
-        #     #self.dataout["blink"] = 1
-        #     self.pupil_processor.fit_model.params = None
-        #     # self.logger.info("Blink detected.")
-        # else:
-        self.pupil_processor.track(img)
+            baseline = np.mean(config.blink[np.nonzero(config.blink)])
+            diff = np.abs(mean_img - baseline)
+
+        self.dataout["pupil"] = ()
+        self.dataout["cr"] = ()
+
+        if self.process_blink and diff > 3:
+            self.dataout["pupil"] = ()
+            self.dataout["cr"] = ()
+            self.logger.info("Blink detected.")
+        else:
+            self.pupil_processor.track(img)
+            if self.cr_processor_1 is not None:
+                self.cr_processor_1.track(img)
 
         if config.arguments.use_gui == 1:
-            try:
-                config.graphical_user_interface.update(img)
-            except Exception as e:
-                print("Did you assign the graphical user interface (GUI) correctly? "
-                    f"Attempting to release(): {e}")
-                self.release()
-                return
+            config.graphical_user_interface.update(img)
 
         self.extractor.fetch(self)
-
-
-    def blink_sampled(self, t: int = 1):
-        """Calibrates blink detection based on sampled mean image intensity."""
-
-        if t == 1:
-            if config.blink_i % 20 == 0:
-                print(f"calibrating blink detector "
-                    f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
-        else:
-            self.logger.info("(success) blink detection calibrated")
 
 
     def release(self) -> None:

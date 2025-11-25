@@ -3,6 +3,7 @@
 """Processor module for eye features (pupil, corneal reflection)."""
 
 import collections
+import time
 
 import numpy as np
 import cv2
@@ -25,45 +26,105 @@ class Center_class():
 
 class Shape():
     """Shape processor for eye features (pupil, corneal reflection)."""
-    def __init__(self, type = 1, n = 0):
+    def __init__(self, type = 1):
         self.side = config.arguments.side
+
+        self.process_blink = False
 
         self.logger = setup_logger(f"{self.side} processor")
         self.active = False
         self.center = -1
 
-        radius_buffer_size = 10
-        self.radius_drop_factor = 0.7
-
-        self.radius_buffer = collections.deque(maxlen=radius_buffer_size)
         self.filtered_radius = None
         self.filtered_center = None
 
         self.walkout_offset = 0
 
-        self.binarythreshold = -1
-        self.blur = (3, 3)
         self.type = type
 
         self.model = config.arguments.model
-        self.type_entry = None
 
         self.side = config.arguments.side
 
-        if type == 1:
-            self.type_entry = "pupil"
+        self.dt_fail_count = 0
+        self.dt_fail_limit = 3
 
+        if type == 1:
+            """Pupil processor settings."""
+            self.type_entry = "pupil"
             if self.model == "circular":
                 self.fit_model = Circle(self)
             else:
                 self.fit_model = Ellipse(self)
+            self.apply_thresh = self.pupil_thresh_
 
-            self.min_radius = 2
-            self.max_radius = 100 #change according to video size or argument
-            self.last_min_radius = self.min_radius
+            # Threshold settings ----------------------------------------------
+            self.binarythreshold = -1 # Binary threshold (computed later)
+            self.blur = (3, 3) # Blur size for thresholding
 
-        self.logger.info("Min_radius = %s", self.min_radius)
+            # Radius settings -------------------------------------------------
+            self.min_radius = 2 # Minimum expected radius for pupil detection
+            self.max_radius = 100 # Maximum expected radius for pupil detection
+
+            # Distance transform settings ------------------------------------
+            self.circularity_min = 2.0 # Minimum circularity for pupil detection
+            self.circularity_max = 3.7 # Maximum circularity for pupil detection
+            self.aspect_ratio_min = 0.7 # Minimum aspect ratio for pupil detection
+
+            self.w_r = 0.4   # Score weight for radius
+            self.w_c = 0.4   # Score weight for circularity
+            self.w_d = 0.2   # Score weight for distance to previous center
+
+            # Radius filter settings -----------------------------------------
+            self.radius_drop_factor = 0.95 # Maximum drop factor for radius in one frame
+            radius_buffer_size = 20 # Size of the buffer for radius filtering
+
+            self.radius_buffer = collections.deque(maxlen=radius_buffer_size)
+
+        elif type == 2:
+            """Corneal reflection processor settings."""
+            self.type_entry = "cr"
+            self.fit_model = Center_class()
+            self.apply_thresh = self.cr_thresh_
+
+            self.number_of_cr = 1 # Set how many CRs to track
+
+            # Threshold settings ----------------------------------------------
+            self.binarythreshold = 200 # Binary threshold
+            self.blur = (1, 1) # Blur size for thresholding
+
+            # Radius settings -------------------------------------------------
+            self.min_radius = 1 # Minimum expected radius for CR detection
+            self.max_radius = 5 # Maximum expected radius for CR detection
+
+            # Distance transform settings -------------------------------------
+            self.circularity_min = 0.0 # Minimum circularity for CR detection
+            self.circularity_max = 100.0 # Maximum circularity for CR detection
+            self.aspect_ratio_min = 2 # Minimum aspect ratio for CR detection
+
+            self.w_r = 0.4   # Score weight for radius
+            self.w_c = 0.4   # Score weight for circularity
+            self.w_d = 0.2   # Score weight for distance to previous center
+
+        else:
+            self.logger.error("Unknown processor type: %s", type)
+
+        self.last_min_radius = self.min_radius
         self.compute_threshold()
+        self.logger.info(
+            "Type: %s_%s; Min_radius: %s; Max_radius: %s; Threshold: %s",
+            config.arguments.side,
+            self.type_entry,
+            self.min_radius,
+            self.max_radius,
+            self.threshold
+        )
+
+        self.time_start: float | None = None
+        self.time_threshold: float | None = None
+        self.time_walkout: float | None = None
+        self.time_fit_model: float | None = None
+        self.time_radius_filter: float | None = None
 
 
     def compute_threshold(self) -> None:
@@ -72,6 +133,9 @@ class Shape():
 
 
     def track(self, source):
+        """Tracks the eye feature in the given source image."""
+        self.time_start = time.perf_counter_ns() / 1e9
+
         if self.last_min_radius != self.min_radius:
             self.compute_threshold()
             self.last_min_radius = self.min_radius
@@ -80,84 +144,119 @@ class Shape():
         self.source = source.copy()
 
         # Performs a simple binarization and applies a smoothing gaussian kernel.
-        self.pupil_thresh() #either pupil or cr
+        self.apply_thresh() #either pupil or cr
+
+        self.time_threshold = time.perf_counter_ns() / 1e9
 
         mean_img = np.mean(self.source)
 
-        try:
-            config.blink[config.blink_i] = mean_img
-            config.blink_i += 1
-            self.blink_sampled(1)
-
-        except IndexError:
-            self.blink_sampled(0)
-            self.blink_sampled = lambda _: None
-            config.blink_i = 0
-
-        baseline = np.mean(config.blink[np.nonzero(config.blink)])
-        self.dataout = {}
-        diff = np.abs(mean_img - baseline)
-
-        # self.logger.info("Mean image intensity: %.2f, baseline: %.2f, diff: %.2f", mean_img, baseline, diff)
-
-        # if diff > 5:
-        #     config.engine.dataout[self.type_entry] = None
-        #     self.logger.info("Blink detected.")
+        # if self.type_entry is None:
+        #     self.logger.error("Processor type_entry is None.")
         #     return
 
-        self.fit() #gets fit model
+        if self.process_blink:
+            try:
+                config.blink[config.blink_i] = mean_img
+                config.blink_i += 1
+
+            except IndexError:
+                config.blink_i = 0
+
+            baseline = np.mean(config.blink[np.nonzero(config.blink)])
+            diff = np.abs(mean_img - baseline)
+
+            # self.logger.info("Mean image intensity: %.2f, baseline: %.2f, diff: %.2f", mean_img, baseline, diff)
+
+            if diff > 5:
+                config.engine.dataout[self.type_entry] = ()
+                self.logger.info("Blink detected.")
+                return
+        if self.type_entry == "pupil":
+            self.fit()
+        else:
+            self.center_adj_dt()
+
+        # self._log_timings()
 
 
-    def blink_sampled(self, t: int = 1):
-        """Calibrates blink detection based on sampled mean image intensity."""
-
-        # if t == 1:
-        #     if config.blink_i % 20 == 0:
-        #         print(f"calibrating blink detector "
-        #             f"{round(config.blink_i/config.blink.shape[0]*100,1)}%")
-        # else:
-        #     self.logger.info("(success) blink detection calibrated")
-
-
-    def pupil_thresh(self):
+    def pupil_thresh_(self):
         self.source[:] = cv2.threshold(
             cv2.GaussianBlur(
-                cv2.erode(
-                    self.source, kernel, iterations = 1
-                ), self.blur, 0), self.binarythreshold, 255, cv2.THRESH_BINARY_INV
+                cv2.erode(self.source, kernel, iterations = 1),
+                self.blur,
+                0
+            ),
+            self.binarythreshold,
+            255,
+            cv2.THRESH_BINARY_INV,
         )[1]
+
+
+    def cr_thresh_(self):
+        _, self.source[:] = cv2.threshold(
+            cv2.GaussianBlur(self.source, self.blur, 0),
+            self.binarythreshold,
+            255,
+            cv2.THRESH_BINARY
+        )
 
 
     def fit(self):
         try:
-            # self.logger.info("Fitting model for %s.", self.type_entry)
             r = self.pupil_walkout()
-
             self.center = self.fit_model.fit(r)
-            raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+
+            self.time_fit_model = time.perf_counter_ns() / 1e9
+
+            # raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+
             frame_valid = self.radius_filter()
 
-            if frame_valid:
-                # normal tracking output
-                config.engine.dataout[self.type_entry] = self.fit_model.params
-            else:
-            #     # snap: return empty output
-                config.engine.dataout[self.type_entry] = None
+            if self.type_entry is not None and self.fit_model.params is not None:
+                if frame_valid:
+                    # Normal tracking output
+                    config.engine.dataout[self.type_entry] = self.fit_model.params
+                else:
+                    # Snap: return empty output
+                    config.engine.dataout[self.type_entry] = ()
 
             # if config.arguments.side == "Right":
             #     self.logger.info("raw=%.3f filtered=%.3f", raw_r, self.fit_model.params[1])
 
-        except IndexError:
+        except IndexError as e:  # noqa: F841
             # self.logger.info("Fit index error")
-            self.center_adj()
+            self.backup_fit()
 
-        except Exception as e:
-            # self.logger.info(f"Fit-func error: {e}")
-            self.center_adj()
+        except Exception:
+            # self.logger.info(f"Fit-func error")
+            self.backup_fit()
+
+
+    def backup_fit(self):
+        """Backup fitting method.
+
+        Uses distance transform and if that fails as well, falls back to HoughCircles.
+        """
+        if self.center_adj_dt():
+            self.dt_fail_count = 0
+        else:
+            config.engine.dataout[self.type_entry] = ()
+            self.dt_fail_count += 1
+            if self.dt_fail_count >= self.dt_fail_limit:
+                # self.logger.info(
+                #     "DT adjustment failed %d times (exception), falling back to HoughCircles.",
+                #     self.dt_fail_count,
+                # )
+                self.center_adj_hc()
+                self.dt_fail_count = 0
 
 
     def radius_filter(self) -> bool:
         """Filters the radius to avoid sudden jumps."""
+        if self.fit_model.params is None:
+            self.logger.error("No previous fit parameters, skipping frame.")
+            return False
+
         cxcy, rx, ry, ang = self.fit_model.params
         new_radius = (rx + ry) / 2.0
         filtered_center = cxcy
@@ -196,6 +295,8 @@ class Shape():
         self.center = filtered_center
         self.fit_model.params = (filtered_center, filtered_r, filtered_r, ang)
 
+        self.time_radius_filter = time.perf_counter_ns() / 1e9
+
         return not is_snap
 
 
@@ -203,8 +304,8 @@ class Shape():
         try:
             center = np.round(self.center).astype(int)
             # self.logger.info("Pupil walkout with center: %s", center)
-        except:
-            return
+        except Exception:
+            raise Exception("No center available for pupil walkout.")
 
         canvas = np.array(self.source, dtype=int)
         canvas[-1,:] = canvas[:,-1] = canvas[0,:] = canvas[:,0] = 0
@@ -262,8 +363,7 @@ class Shape():
         ], dtype=int) + self.min_radius
 
         # self.logger.info("1. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
-
-        #self.logger.info(crop_list)
+        # self.logger.info(crop_list)
 
         if np.sum(crop_list) < self.threshold:
             #origin inside corneal reflection?
@@ -341,7 +441,7 @@ class Shape():
                 # self.logger.warning("Pupil walkout failed: insufficient edge points found.")
                 raise IndexError
 
-        radius = np.sum(crop_list) / (len(crop_stock) * 1.05)
+        # radius = np.sum(crop_list) / (len(crop_stock) * 1.05)
         # self.logger.info("Estimated pupil radius: %.2f", radius)
 
         r[:8,:] = center
@@ -352,6 +452,8 @@ class Shape():
         r[rx_multiplied, 0] *= rx_multiply
         r[ry_multiplied, 1] *= ry_multiply
         r[8:,:] += center
+
+        self.time_walkout = time.perf_counter_ns() / 1e9
 
         return self.cond(r, crop_list)
 
@@ -369,45 +471,254 @@ class Shape():
         return r[cond_]
 
 
-    def center_adj(self):
+    def center_adj_dt(self) -> bool:
+        """
+        Distance-transform based detection of circular blobs (pupil or CRs).
+
+        Returns True if at least one plausible blob was found, False otherwise.
+        """
+        if self.type_entry == "cr":
+            max_blobs = self.number_of_cr
+        else:
+            max_blobs = 1
+
+        self.time_center_adj_start = time.perf_counter_ns() / 1e9
+        # clear old results
+        self.dt_blobs = []
+
+        try:
+            if self.source is None:
+                return False
+
+            bin_img = self.source  # already binary (0/255) at this point
+
+            # Connected components
+            num_labels, labels = cv2.connectedComponents(bin_img)
+            if num_labels <= 1:
+                # no foreground at all
+                # if self.type_entry == "cr":
+                    # self.logger.info("DT center_adj: no foreground at all")
+                self.time_center_adj_dt = time.perf_counter_ns() / 1e9
+                return False
+
+            # previous center guess (if available), used to score candidates
+            prev_center: tuple[float, float] | None = None
+            if isinstance(self.center, tuple) and len(self.center) == 2:
+                prev_center = self.center
+
+            candidates: list[
+                tuple[tuple[int, int], float, float, float]
+            ] = []  # (center, r_est, circularity, score)
+
+            for lbl in range(1, num_labels):
+                # mask for this component
+                comp_mask = np.where(labels == lbl, 255, 0).astype(np.uint8)
+
+                area = float(np.sum(comp_mask > 0))
+                if area < (self.min_radius ** 2 * np.pi):
+                    # too small to be a valid blob
+                    # if self.type_entry == "cr":
+                        # self.logger.info("DT center_adj: found area too small: %.1f; min_area: %.1f", area, self.min_radius ** 2 * np.pi)
+                    continue
+
+                # Distance transform on this component only
+                dist = cv2.distanceTransform(
+                    comp_mask, cv2.DIST_L2, cv2.DIST_MASK_5
+                )
+                _, maxVal, _, maxLoc = cv2.minMaxLoc(dist)
+                r_est = float(maxVal)
+
+                # radius range check
+                if r_est < self.min_radius or r_est > self.max_radius:
+                    # if self.type_entry == "cr":
+                    #     self.logger.info(
+                    #         "DT center_adj: found r_est out of range: min_radius: %.1f; r_est: %.1f; max_radius: %.1f",
+                    #         self.min_radius,
+                    #         r_est,
+                    #         self.max_radius,
+                    #     )
+                    continue
+
+                # circularity check
+                expected_area = np.pi * (r_est ** 2)
+                if expected_area <= 0:
+                    continue
+                circularity = area / expected_area
+
+                if not (self.circularity_min <= circularity <= self.circularity_max):
+                    # shape too skinny / weird / incomplete
+                    # if self.type_entry == "cr":
+                    #     self.logger.info("DT center_adj: found circularity out of range: circularity: %.2f; min: %.2f; max: %.2f",
+                    #     circularity,
+                    #     self.circularity_min,
+                    #     self.circularity_max
+                    #     )
+                    continue
+
+                # aspect ratio check
+                ys, xs = np.where(comp_mask > 0)
+                h = float(ys.max() - ys.min() + 1)
+                w = float(xs.max() - xs.min() + 1)
+                aspect = max(h, w) / max(1.0, min(h, w))  # avoid div-by-zero
+
+                if aspect > 2.0:
+                    # very elongated blob, probably not a pupil / CR
+                    continue
+
+                cx, cy = maxLoc
+
+                # --- Score: radius + circularity + closeness to previous center ---
+                mid_r = 0.5 * (self.min_radius + self.max_radius)
+                radius_term = abs(r_est - mid_r) / (mid_r + 1e-6)
+
+                # Only use circularity term if the configured range is “tight”
+                circ_term = 0.0
+                circ_range = self.circularity_max - self.circularity_min
+                if circ_range > 1e-3 and circ_range < 10.0:
+                    circ_target = 0.5 * (self.circularity_min + self.circularity_max)
+                    circ_term = abs(circularity - circ_target) / (circ_target + 1e-6)
+
+                dist_term = 0.0
+                if prev_center is not None:
+                    dist_term = np.hypot(cx - prev_center[0], cy - prev_center[1]) / (
+                        mid_r + 1e-6
+                    )
+                else:
+                    dist_term = 0.0  # no penalty if no previous center
+
+                score = self.w_r * radius_term + self.w_c * circ_term + self.w_d * dist_term
+
+                candidates.append(((cx, cy), r_est, circularity, score))
+
+            if not candidates:
+                # nothing passed all checks
+                self.time_center_adj_dt = time.perf_counter_ns() / 1e9
+                config.engine.dataout[self.type_entry] = ()
+                return False
+
+            # sort by score (lower is better)
+            candidates.sort(key=lambda c: c[3])
+
+            # keep up to max_blobs best blobs
+            top_n = min(max_blobs, len(candidates))
+            for i in range(top_n):
+                (cx, cy), r_est, circularity, _score = candidates[i]
+                self.dt_blobs.append(((int(cx), int(cy)), float(r_est)))
+
+            if self.type_entry == "cr":
+                config.engine.dataout[self.type_entry] = self.dt_blobs
+            elif self.type_entry == "pupil":
+                best_center, best_radius = self.dt_blobs[0]
+                self.center = best_center
+            else:
+                self.logger.error("Unknown type_entry in center_adj_dt: %s", self.type_entry)
+
+            self.time_center_adj_dt = time.perf_counter_ns() / 1e9
+            return True
+
+        except Exception as e:
+            self.logger.warning("DT center_adj failed with error: %s", e)
+            return False
+
+
+    def center_adj_hc(self):
         #adjust settings:
         # blurred = cv2.GaussianBlur(self.raw, (3, 3), 2)
-        circles = cv2.HoughCircles(self.raw, cv2.HOUGH_GRADIENT, 1.5, 10, param1=200, param2=15, minRadius=self.min_radius, maxRadius=self.max_radius)
+        if self.type_entry == "cr":
+            self.logger.info("Attempting HoughCircles center adjustment.")
+        self.time_center_adj_start = time.perf_counter_ns() / 1e9
+        circles = cv2.HoughCircles(
+            self.raw,
+            cv2.HOUGH_GRADIENT,
+            1.5,
+            10,
+            param1=200,
+            param2=15,
+            minRadius=self.min_radius,
+            maxRadius=self.max_radius
+        )
 
         if circles is None:
             # self.logger.info("No circles found for center adjustment.")
             return
-        else:
-            smallest = -1
-            current = -1
 
-            if self.center == -1:
-                self.center = (self.raw.shape[1]//2, self.raw.shape[0]//2)
+        smallest = -1
+        current = -1
 
-            for circle in circles[0, :]:
-                score = (
-                    self.distance(circle[:2], self.center) +
-                    np.mean(
-                        self.raw[int(circle[1])-self.min_radius:int(circle[1])+self.min_radius,
-                                 int(circle[0]-self.min_radius):int(circle[0]+self.min_radius)]
-                        ))
-                try:
-                    self.raw[int(circle[1]), int(circle[0])] = 100
-                except IndexError:
-                    self.logger.warning("Circle index error during center adjustment.")
-                    self.logger.warning("Raw shape: %s; center: %s", self.raw.shape, circle[:2])
-                # cv2.imshow("kk", self.raw)
-                # cv2.waitKey(0)
-                if smallest == -1:
-                    smallest = score
-                    current = circle[:2]
-                elif score < smallest:
-                    smallest = score
-                    current = circle[:2]
+        if self.center == -1:
+            self.center = (self.raw.shape[1]//2, self.raw.shape[0]//2)
 
-            self.center = tuple(current)
-            # self.logger.info("Image shape: %s; Found center: %s", self.raw.shape, self.center)
+        for circle in circles[0, :]:
+            score = (
+                self.distance(circle[:2], self.center) +
+                np.mean(
+                    self.raw[int(circle[1])-self.min_radius:int(circle[1])+self.min_radius,
+                                int(circle[0]-self.min_radius):int(circle[0]+self.min_radius)]
+                    ))
+            try:
+                self.raw[int(circle[1]), int(circle[0])] = 100
+            except IndexError:
+                self.logger.warning("Circle index error during center adjustment.")
+                self.logger.warning("Raw shape: %s; center: %s", self.raw.shape, circle[:2])
+
+            if smallest == -1:
+                smallest = score
+                current = circle[:2]
+            elif score < smallest:
+                smallest = score
+                current = circle[:2]
+            try:
+                if not isinstance(current, np.ndarray) and current != -1:
+                    self.center = tuple(current)
+                    # self.logger.info("Image shape: %s; Found center: %s", self.raw.shape, self.center)
+            except Exception:
+                self.logger.error(current)
+
+        self.time_center_adj_hc = time.perf_counter_ns() / 1e9
 
 
     def distance(self, a, b):
         return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+
+
+    def _log_timings(self) -> None:  # type: ignore[operator]
+        """Logs the timing information for each processing step."""
+        try:
+            if self.time_radius_filter is not None:
+                self.logger.info(
+                    "%s; threshold: %.3fms; walkout=%.3fms, fit=%.3fms, filter=%.3fms, total=%.3fms",
+                    self.type_entry,
+                    (self.time_threshold - self.time_start) * 1000,  # type: ignore
+                    (self.time_walkout - self.time_threshold) * 1000,  # type: ignore
+                    (self.time_fit_model - self.time_walkout) * 1000,  # type: ignore
+                    (self.time_radius_filter - self.time_fit_model) * 1000,  # type: ignore
+                    (self.time_radius_filter - self.time_start) * 1000,  # type: ignore
+                )
+                pass
+            elif self.time_center_adj_dt is not None:
+                self.logger.info(
+                    "%s; threshold: %.3fms; dt=%.3fms; total=%.3fms",
+                    self.type_entry,
+                    (self.time_threshold - self.time_start) * 1000,  # type: ignore
+                    (self.time_center_adj_dt - self.time_center_adj_start) * 1000,  # type: ignore
+                    (self.time_center_adj_dt - self.time_start) * 1000,  # type: ignore
+                )
+                pass
+            elif self.time_center_adj_hc is not None:
+                self.logger.info(
+                    "%s; threshold: %.3fms; hc=%.3fms; total=%.3fms",
+                    self.type_entry,
+                    (self.time_threshold - self.time_start) * 1000,  # type: ignore
+                    (self.time_center_adj_hc - self.time_center_adj_start) * 1000,  # type: ignore
+                    (self.time_center_adj_hc - self.time_start) * 1000,  # type: ignore
+                )
+                pass
+            else:
+                pass
+                # self.logger.warning("Incomplete timing information.")
+
+        except Exception as e:
+            self.logger.warning("Timing log error: %s", e)
+
+        self.time_start = self.time_threshold = self.time_walkout = \
+            self.time_fit_model = self.time_radius_filter = self.time_center_adj_dt = self.time_center_adj_hc = None

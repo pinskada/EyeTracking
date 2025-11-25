@@ -1,13 +1,10 @@
 """Minimum GUI for Eyeloop module."""
 
-import os
-import threading
-
 import numpy as np
 import cv2
 
 import eyeloop.config as config
-from eyeloop.constants.minimum_gui_constants import *
+from eyeloop.constants.minimum_gui_constants import *  # noqa: F403
 from eyeloop.utilities.general_operations import to_int, tuple_int
 from vr_core.utilities.logger_setup import setup_logger
 
@@ -21,18 +18,20 @@ class GUI:
         self.side = config.arguments.side
 
         self.preview = self.side + "_preview"
-        self.binary = self.side + "_binary"
+        self.pupil_bin = self.side + "_binary_pupil"
+        self.cr_bin = self.side + "_binary_cr"
 
         self.dx = 0
         self.dy = 0
         self.cycle = 1
         self.circle_size = 1
         self.locked = False
+        self.print_cycle = 0
 
         self._state = "adjustment"
         self.inquiry = "none"
         self.terminate = -1
-        self.update = self.adj_update#real_update
+        self.update = self.adj_update
         self.skip = 0
         self.first_run = True
 
@@ -42,8 +41,6 @@ class GUI:
 
 
     def arm(self, width: int, height: int) -> None:
-        self.fps = np.round(1/config.arguments.fps, 2)
-
         self.pupil_processor = config.engine.pupil_processor
 
         if not self.display_gui:
@@ -62,46 +59,61 @@ class GUI:
         self.bin_stock_txt = np.zeros((20, self.binary_width))
         self.bin_stock_txt_selected = self.bin_stock_txt.copy()
 
-        if (self.side == "Right"):
-            x_shift = 350
-        else:
-            x_shift = 25
+        shape = self.bin_stock.shape
+        height, width = shape[0], shape[1]
+        scale = 1
 
-        cv2.namedWindow(self.preview, cv2.WINDOW_NORMAL)
-        cv2.namedWindow(self.binary, cv2.WINDOW_NORMAL)
+        width = width // scale
+        height = height // scale
+
+        if (self.side == "Right"):
+            x_shift = width
+        else:
+            x_shift = 0
+
+        cv2.namedWindow(self.preview)
+        cv2.namedWindow(self.pupil_bin)
 
         cv2.imshow(self.preview, np.hstack((self.bin_stock, self.bin_stock)))
-        cv2.imshow(self.binary, np.vstack((self.bin_stock, self.bin_stock)))
+        cv2.imshow(self.pupil_bin, np.vstack((self.bin_stock, self.bin_stock)))
 
-        cv2.resizeWindow(self.preview, 300, 450)
-        cv2.resizeWindow(self.binary, 300, 450)
+        cv2.resizeWindow(self.preview, width, height)
+        cv2.resizeWindow(self.pupil_bin, width, height)
 
-        cv2.moveWindow(self.preview, x_shift, 25)
-        cv2.moveWindow(self.binary, x_shift, 500)
+        cv2.moveWindow(self.preview, x_shift, 0)
+        cv2.moveWindow(self.pupil_bin, x_shift, height + 30)
+
+        if config.engine.cr_processor_1 is not None:
+            cv2.namedWindow(self.cr_bin)
+            cv2.imshow(self.cr_bin, np.vstack((self.bin_stock, self.bin_stock)))
+            cv2.resizeWindow(self.cr_bin, width, height)
+            cv2.moveWindow(self.cr_bin, x_shift, 2 * height + 60)
 
 
-    def place_cross(self, source: np.ndarray, point: tuple, color: tuple) -> None:
+    def place_cross(self, source: np.ndarray, point: tuple, color: tuple, thickness: int, size: int) -> None:
         try:
-            source[to_int(point[1] - 20):to_int(point[1] + 19), to_int(point[0]-1):to_int(point[0]+1)] = color
-            source[to_int(point[1]-1):to_int(point[1]+1), to_int(point[0] - 20):to_int(point[0] + 19)] = color
-        except:
+            source[to_int(point[1] - size):to_int(point[1] + size-1), to_int(point[0]-thickness):to_int(point[0]+thickness)] = color
+            source[to_int(point[1]-thickness):to_int(point[1]+thickness), to_int(point[0] - size):to_int(point[0] + size-1)] = color
+        except Exception:
             pass
 
 
-    def skip_track(self):
-        self.update = self.real_update
-
-
     def pupil(self, source_rgb):
-        try:
-            pupil_center, pupil_width, pupil_height, pupil_angle = config.engine.dataout["pupil"]
-            #self.logger.info("pupil radius: %s", pupil_width)
-            cv2.ellipse(source_rgb, tuple_int(pupil_center), tuple_int((pupil_width, pupil_height)), pupil_angle, 0, 360, red, 1)
-            self.place_cross(source_rgb, pupil_center, red)
-            return True
-        except Exception as e:
-            #print(f"pupil not found: {e}")
-            return False
+        if config.engine.dataout["pupil"]:
+            try:
+                pupil_center, pupil_width, pupil_height, pupil_angle = config.engine.dataout["pupil"]
+                #self.logger.info("pupil radius: %s", pupil_width)
+                cv2.ellipse(source_rgb, tuple_int(pupil_center), tuple_int((pupil_width, pupil_height)), pupil_angle, 0, 360, red, 1)  # noqa: F405
+                self.place_cross(source_rgb, pupil_center, red, 1, 20)  # noqa: F405
+            except Exception as e:
+                self.logger.error(f"Pupil mark error: {e}")
+        if config.engine.dataout["cr"]:
+            try:
+                cr_list = config.engine.dataout["cr"]
+                for cr_center in cr_list:
+                    self.place_cross(source_rgb, cr_center[0], green, 1, 12)  # noqa: F405
+            except Exception as e:
+                self.logger.error(f"CR mark error: {e}")
 
 
     def adj_update(self, img):
@@ -109,25 +121,19 @@ class GUI:
 
         self.bin_P = self.bin_stock.copy()
 
-        if self.pupil(source_rgb):
-            self.bin_P[0:20, 0:self.binary_width] = self.bin_stock_txt_selected
-        else:
-            self.bin_P[0:20, 0:self.binary_width] = self.bin_stock_txt
+        self.pupil(source_rgb)
 
-        try:
-            pupil_area = self.pupil_processor.source
+        # if self.print_cycle % 50 == 0 and self.display_gui:
+        self.print_cycle += 1
+        pupil_area = self.pupil_processor.source
+        cv2.imshow(self.preview, source_rgb)
+        cv2.imshow(self.pupil_bin, pupil_area)
+        if config.engine.cr_processor_1 is not None:
+            cr1_area = config.engine.cr_processor_1.source
+            cv2.imshow(self.cr_bin, cr1_area)
 
-            offset_y = int((self.binary_height - pupil_area.shape[0]) / 2)
-            offset_x = int((self.binary_width - pupil_area.shape[1]) / 2)
-            self.bin_P[offset_y:min(offset_y + pupil_area.shape[0], self.binary_height),
-            offset_x:min(offset_x + pupil_area.shape[1], self.binary_width)] = pupil_area
-        except:
-            pass
-
-        if self.display_gui:
-            cv2.imshow(self.preview, source_rgb)
-            cv2.imshow(self.binary, self.bin_P)
-            cv2.waitKey(50)
+        cv2.waitKey(1)
+        self.print_cycle = 0
 
         if self.first_run:
                 #cv2.destroyAllWindows()
@@ -143,98 +149,9 @@ class GUI:
     def real_update(self, img) -> None:
         source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         self.pupil(source_rgb)
-
-        if self.display_gui:
+        self.print_cycle += 1
+        if self.print_cycle % 50 == 0 and self.display_gui:
             cv2.imshow(self.preview, source_rgb)
             cv2.waitKey(1)
-        threading.Timer(self.fps, self.skip_track).start() #run feed every n secs (n=1)
+            self.print_cycle = 0
         self.update = lambda _: None
-
-
-    def pupil_lock(self):
-        """
-        This method tries to lock on to the pupil. If sucessful it initiates the tracking algorithm.
-        If not, it calls center_offset_generater() to adjust the cursor value.
-        """
-
-        self.logger.info("<%s> attempting to lock pupil", config.arguments.side)
-
-        try:
-            # If sucessful, tracking is initiated
-            if (self.pupil_processor.fit_model.params[1] > config.arguments.min_radius_threshold and
-                self.pupil_processor.fit_model.params[1] < config.arguments.max_radius_threshold):
-
-                self.logger.info("<%s> pupil is locked.", config.arguments.side)
-
-                self.locked = True
-                self.inquiry = "track"
-
-                self._state = "tracking"
-
-                self.update = self.real_update
-
-                return
-            else:
-                # If not sucessful, cursor adjustment is made
-                self.logger.info("<%s> pupil is not locked, attempting to lock.", config.arguments.side)
-                self.center_offset_generator()
-
-        except:
-            pass
-
-        # Tries to lock on to the pupil with the current cursor value
-        self.pupil_processor.reset(self.cursor)
-
-
-    def center_offset_generator(self):
-        """
-        This method changes the value of cursor for searching the pupil.
-        It circles (moves in a square) around the centre of the images.
-        The position difference between the new and old cursor value is always in size of step.
-        After finishing a whole circle (square) a new and bigger one
-        will initiate with radius of step * self.circle_size.
-        Current position of the square is given by self.cycle
-        """
-
-        # Square value computation---------------------------------------------
-
-        step = config.arguments.search_step # Step size for the search
-
-        if self.cycle == 1:                             # Initial position
-            self.dx = - step * self.circle_size
-            self.dy = - step * self.circle_size
-            #print("x: " + str(self.dx) + ", y: " + str(self.dy))
-        elif self.cycle < (4 + 2*(self.circle_size-1)): # Top side
-            self.dx += step
-        elif self.cycle < (6 + 4*(self.circle_size-1)): # Right side
-            self.dy += step
-        elif self.cycle < (8 + 6*(self.circle_size-1)): # Bottom side
-            self.dx -= step
-        else:                                           # Left side
-            self.dy -= step
-
-
-        # Value assignment-----------------------------------------------------
-
-        # Adding a new value to cursor
-        self.cursor = (self.centre[0] + self.dx, self.centre[1] + self.dy)
-
-        self.logger.info("<%s> cursor new value: %s", config.arguments.side, self.cursor)
-
-        # Return if cursor is beyond window
-        if self.cursor[0] > self.binary_width | self.cursor[1] > self.binary_height:
-            print("No pupil find, exiting.")
-            return
-
-        # Iteration------------------------------------------------------------
-
-        # Check whether a whole circle around centre has been made
-        if self.cycle % (8 * self.circle_size) == 0:
-            self.circle_size += 1 # Next circle will be bigger
-            self.cycle = 1 # Reset cycle count
-            return
-
-        # Increase cycle count for next search
-        self.cycle += 1
-
-        #self.pupil_processor.reset(self.cursor)

@@ -11,7 +11,7 @@ import cv2
 import eyeloop.config as config
 from eyeloop.constants.processor_constants import *
 from eyeloop.engine.models.circular import Circle
-from eyeloop.engine.models.ellipsoid import Ellipse  # noqa: F401
+from eyeloop.engine.models.ellipsoid import Ellipse, Fast_Elliptical_Stable
 from vr_core.utilities.logger_setup import setup_logger
 
 
@@ -147,8 +147,8 @@ class Shape():
         self.type = type
 
         #self.model = config.arguments.model
-        self.model = "elliptical"
-        # self.model = "fast_elliptical"
+        # self.model = "elliptical"
+        self.model = "fast_elliptical"
 
         self.side = config.arguments.side
 
@@ -163,7 +163,7 @@ class Shape():
             elif self.model == "elliptical":
                 self.fit_model = Ellipse(self)
             elif self.model == "fast_elliptical":
-                self.fit_model = Fast_Elliptical()
+                self.fit_model = Fast_Elliptical_Stable()
             else:
                 self.logger.error(f"Unknown model: {self.model}")
 
@@ -287,7 +287,7 @@ class Shape():
         else:
             self.center_adj_dt()
 
-        # self._log_timings()
+        self._log_timings()
 
 
     def pupil_thresh_(self) -> None:

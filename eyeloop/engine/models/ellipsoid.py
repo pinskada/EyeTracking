@@ -135,3 +135,157 @@ class Ellipse:
         self.params = (center, aproximate_radius)
 
         return self.params
+
+
+class Fast_Elliptical_Stable:
+    """
+    Faster, center-focused ellipse fit with temporal smoothing.
+
+    - Linear LS fit of a conic:
+        A x^2 + B x y + C y^2 + D x + E y + F = 0, F = -1
+    - Extracts center (cx, cy) from 2x2 linear system.
+    - Estimates radius from distances to center.
+    - Uses previous params to smooth out jumps.
+
+    Output:
+        params = ((cx, cy), r_est)
+    """
+
+    def __init__(self):
+        # params = ((cx, cy), r_est)
+        self.params: tuple[tuple[float, float], float] | None = None
+
+        # Smoothing / clamp hyperparams (tune!)
+        self.alpha_center = 0.5   # 0..1, 1 = no smoothing
+        self.alpha_radius = 0.5   # 0..1
+        self.max_center_jump = 3.0  # px per frame
+        self.max_radius_jump = 3.0  # px per frame
+
+    def fit(self, r) -> tuple[tuple[float, float], float]:
+        r = np.asarray(r, dtype=np.float64)
+        if r.ndim != 2 or r.shape[1] != 2:
+            raise ValueError("Fast_Elliptical.fit expects (N, 2) array")
+        n_pts = r.shape[0]
+        if n_pts < 5:
+            # Not enough points -> crude fallback: mean + median radius
+            center = np.mean(r, axis=0)
+            dists = np.linalg.norm(r - center, axis=1)
+            r_est = float(np.median(dists)) if dists.size else 0.0
+            center = (float(center[0]), float(center[1]))
+            self._update_params(center, r_est)
+            return self.params
+
+        x = r[:, 0]
+        y = r[:, 1]
+
+        # Shift coordinates to improve conditioning
+        x_mean = float(np.mean(x))
+        y_mean = float(np.mean(y))
+        x0 = x - x_mean
+        y0 = y - y_mean
+
+        # Linear system for A,B,C,D,E with F fixed at -1:
+        # A x^2 + B x y + C y^2 + D x + E y - 1 = 0
+        A_mat = np.column_stack((x0 * x0, x0 * y0, y0 * y0, x0, y0))  # (N, 5)
+        b_vec = np.ones_like(x0)
+
+        try:
+            p, *_ = np.linalg.lstsq(A_mat, b_vec, rcond=None)
+            A_c, B_c, C_c, D_c, E_c = p
+        except np.linalg.LinAlgError:
+            # Fallback: no model, just keep previous or mean
+            center = np.mean(r, axis=0)
+            dists = np.linalg.norm(r - center, axis=1)
+            r_est = float(np.median(dists)) if dists.size else 0.0
+            center = (float(center[0]), float(center[1]))
+            self._update_params(center, r_est)
+            return self.params
+
+        # Check ellipse-ish condition: 4AC - B^2 > 0
+        cond = 4.0 * A_c * C_c - B_c * B_c
+        if cond <= 1e-8:
+            # Degenerate conic (parabola/hyperbola) -> don't trust it, use crude
+            center = np.mean(r, axis=0)
+            dists = np.linalg.norm(r - center, axis=1)
+            r_est = float(np.median(dists)) if dists.size else 0.0
+            center = (float(center[0]), float(center[1]))
+            self._update_params(center, r_est)
+            return self.params
+
+        # Solve for center in shifted coordinates:
+        # [2A  B ] [cx0] = [-D]
+        # [ B 2C] [cy0]   [-E]
+        M = np.array([[2.0 * A_c, B_c],
+                      [B_c,       2.0 * C_c]], dtype=np.float64)
+        rhs = np.array([-D_c, -E_c], dtype=np.float64)
+        try:
+            cx0, cy0 = np.linalg.solve(M, rhs)
+        except np.linalg.LinAlgError:
+            cx0, cy0 = 0.0, 0.0
+
+        # Shift back to original coordinates
+        cx = float(cx0 + x_mean)
+        cy = float(cy0 + y_mean)
+        center = np.array([cx, cy], dtype=np.float64)
+
+        # Raw radius estimate
+        dists = np.linalg.norm(r - center, axis=1)
+        if dists.size == 0:
+            r_raw = 0.0
+        elif dists.size < 5:
+            r_raw = float(np.mean(dists))
+        else:
+            med = float(np.median(dists))
+            mad = float(np.median(np.abs(dists - med))) + 1e-6
+            mask = np.abs(dists - med) < 2.5 * mad
+            r_raw = float(np.mean(dists[mask])) if np.any(mask) else med
+
+        # Temporal smoothing + jump limiting
+        center_smooth, r_smooth = self._smooth(center, r_raw)
+
+        self.params = ( (float(center_smooth[0]), float(center_smooth[1])),
+                        float(r_smooth) )
+        return self.params
+
+    def _smooth(self, center_raw: np.ndarray, r_raw: float):
+        """
+        Smooth against previous params and clamp jumps.
+        """
+        if self.params is None:
+            return center_raw, r_raw
+
+        prev_center, prev_r = self.params
+        prev_center = np.asarray(prev_center, dtype=np.float64)
+        prev_r = float(prev_r)
+
+        # Clamp center jump
+        delta_c = center_raw - prev_center
+        dist = float(np.linalg.norm(delta_c))
+        if dist > self.max_center_jump:
+            if dist > 1e-6:
+                delta_c *= self.max_center_jump / dist
+            center_raw = prev_center + delta_c
+
+        # Clamp radius jump
+        delta_r = r_raw - prev_r
+        if abs(delta_r) > self.max_radius_jump:
+            delta_r = np.sign(delta_r) * self.max_radius_jump
+            r_raw = prev_r + delta_r
+
+        # Exponential smoothing
+        c_alpha = self.alpha_center
+        r_alpha = self.alpha_radius
+
+        center_smooth = (1.0 - c_alpha) * prev_center + c_alpha * center_raw
+        r_smooth = (1.0 - r_alpha) * prev_r + r_alpha * r_raw
+
+        return center_smooth, r_smooth
+
+    def _update_params(self, center: tuple[float, float], r_est: float):
+        """
+        Helper for crude fallbacks: still apply temporal smoothing if we have history.
+        """
+        center_arr = np.array(center, dtype=np.float64)
+        center_smooth, r_smooth = self._smooth(center_arr, r_est)
+        self.params = ( (float(center_smooth[0]), float(center_smooth[1])),
+                        float(r_smooth) )

@@ -123,41 +123,24 @@ class GUI:
 
 
     def adj_update(self, img):
-        source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-        self.bin_P = self.bin_stock.copy()
-
-        self.pupil(source_rgb)
-
-        # if self.print_cycle % 50 == 0 and self.display_gui:
         self.print_cycle += 1
-        pupil_area = self.pupil_processor.source
-        cv2.imshow(self.preview, source_rgb)
-        cv2.imshow(self.pupil_bin, pupil_area)
-        if config.engine.cr_processor_1 is not None:
-            cr1_area = config.engine.cr_processor_1.source
-            cv2.imshow(self.cr_bin, cr1_area)
+        if self.print_cycle % 100 == 0 and self.display_gui:
+            source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            self.bin_P = self.bin_stock.copy()
+            self.pupil(source_rgb)
 
-        cv2.waitKey(1)
-        self.print_cycle = 0
+            pupil_area = self.pupil_processor.source
+            cv2.imshow(self.preview, source_rgb[::2, ::2])
+            cv2.imshow(self.pupil_bin, pupil_area[::2, ::2])
+            if config.engine.cr_processor_1 is not None:
+                cr1_area = config.engine.cr_processor_1.source
+                cv2.imshow(self.cr_bin, cr1_area)
+            cv2.waitKey(1)
+            self.print_cycle = 0
 
         if self.first_run:
                 #cv2.destroyAllWindows()
                 self.first_run = False
                 self.centre = (round(self.binary_width/2), round(self.binary_height/2))
                 self.cursor = self.centre
-        # else:
-        #     #self.logger.info("locked: %s; auto_search: %s", self.locked, config.arguments.auto_search)
-        #     if self.locked == False and config.arguments.auto_search == True:
-        #         self.pupil_lock()
-
-
-    def real_update(self, img) -> None:
-        source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        self.pupil(source_rgb)
-        self.print_cycle += 1
-        if self.print_cycle % 50 == 0 and self.display_gui:
-            cv2.imshow(self.preview, source_rgb)
-            cv2.waitKey(1)
-            self.print_cycle = 0
-        self.update = lambda _: None

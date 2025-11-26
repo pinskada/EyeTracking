@@ -30,8 +30,8 @@ class Engine:
         self.center: tuple[int, int]
 
         self.pupil_processor = Shape()
-        self.cr_processor_1 = Shape(2)
-        # self.cr_processor_1 = None
+        self.cr_processor = Shape(2)
+        # self.cr_processor = None
 
         # Initialize dataout attribute
         self.dataout: dict[str, Any] = {}
@@ -81,8 +81,8 @@ class Engine:
             self.logger.info("Blink detected.")
         else:
             self.pupil_processor.track(img)
-            if self.cr_processor_1 is not None:
-                self.cr_processor_1.track(img)
+            if self.cr_processor is not None:
+                self.cr_processor.track(img)
 
         if config.arguments.use_gui == 1:
             config.graphical_user_interface.update(img)

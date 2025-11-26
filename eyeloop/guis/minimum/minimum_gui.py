@@ -68,26 +68,24 @@ class GUI:
 
         if (self.side == "Right"):
             x_shift = width
+            x_shift_cr_bin = 3 * width
         else:
             x_shift = 0
+            x_shift_cr_bin = 2 * width
 
-        cv2.namedWindow(self.preview)
-        cv2.namedWindow(self.pupil_bin)
-
-        cv2.imshow(self.preview, np.hstack((self.bin_stock, self.bin_stock)))
-        cv2.imshow(self.pupil_bin, np.vstack((self.bin_stock, self.bin_stock)))
+        cv2.namedWindow(self.preview, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(self.pupil_bin, cv2.WINDOW_NORMAL)
 
         cv2.resizeWindow(self.preview, width, height)
         cv2.resizeWindow(self.pupil_bin, width, height)
 
-        cv2.moveWindow(self.preview, x_shift, 0)
-        cv2.moveWindow(self.pupil_bin, x_shift, height + 30)
+        cv2.moveWindow(self.preview, x_shift, 20)
+        cv2.moveWindow(self.pupil_bin, x_shift, height + 50)
 
-        if config.engine.cr_processor_1 is not None:
-            cv2.namedWindow(self.cr_bin)
-            cv2.imshow(self.cr_bin, np.vstack((self.bin_stock, self.bin_stock)))
+        if config.engine.cr_processor is not None:
+            cv2.namedWindow(self.cr_bin, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(self.cr_bin, width, height)
-            cv2.moveWindow(self.cr_bin, x_shift, 2 * height + 60)
+            cv2.moveWindow(self.cr_bin, x_shift_cr_bin, height + 50)
 
 
     def place_cross(
@@ -125,17 +123,16 @@ class GUI:
     def adj_update(self, img):
 
         self.print_cycle += 1
-        if self.print_cycle % 100 == 0 and self.display_gui:
+        if self.print_cycle % 5 == 0 and self.display_gui:
             source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            self.bin_P = self.bin_stock.copy()
             self.pupil(source_rgb)
 
             pupil_area = self.pupil_processor.source
-            cv2.imshow(self.preview, source_rgb[::2, ::2])
-            cv2.imshow(self.pupil_bin, pupil_area[::2, ::2])
-            if config.engine.cr_processor_1 is not None:
-                cr1_area = config.engine.cr_processor_1.source
-                cv2.imshow(self.cr_bin, cr1_area)
+            cv2.imshow(self.preview, source_rgb)
+            cv2.imshow(self.pupil_bin, pupil_area)
+            if config.engine.cr_processor is not None:
+                cr_area = config.engine.cr_processor.source
+                cv2.imshow(self.cr_bin, cr_area)
             cv2.waitKey(1)
             self.print_cycle = 0
 

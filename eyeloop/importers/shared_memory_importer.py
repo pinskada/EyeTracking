@@ -148,39 +148,42 @@ class Importer():
         """Configure the run-time parameters based on the received message."""
 
         try:
-            if  msg.get("param") == "threshold":
+            if  msg.get("param") == "threshold_pupil":
                 thr = msg.get("value")
                 config.engine.pupil_processor.binarythreshold = thr
-                # self.logger.info("<%s> Threshold decreased to %d",
-                #     self.side, thr
-                # )
+            elif  msg.get("param") == "threshold_cr":
+                thr = msg.get("value")
+                config.engine.cr_processor.binarythreshold = thr
 
-            elif msg.get("param") == "blur_size":
+            elif msg.get("param") == "blur_size_pupil":
                 blur = msg.get("value")
-
                 if blur % 2 == 0:
                     blur += 1
-
                 config.engine.pupil_processor.blur = (blur, blur)
-                # self.logger.info("<%s> Blur decreased to %s.",
-                #     self.side, blur
-                # )
+
+            elif msg.get("param") == "blur_size_cr":
+                blur = msg.get("value")
+                if blur % 2 == 0:
+                    blur += 1
+                config.engine.cr_processor.blur = (blur, blur)
 
             elif msg.get("param") == "auto_search":
                 config.arguments.auto_search = msg.get("value")
                 self.logger.info("<%s> auto_search set to %d", self.side, msg.get("value"))
 
-            elif msg.get("param") == "min_radius":
+            elif msg.get("param") == "min_radius_pupil":
                 config.engine.pupil_processor.min_radius = msg.get("value")
                 # self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
+            elif msg.get("param") == "min_radius_cr":
+                config.engine.cr_processor.min_radius = msg.get("value")
+                # self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
 
-            elif msg.get("param") == "max_radius":
+            elif msg.get("param") == "max_radius_pupil":
                 config.engine.pupil_processor.max_radius = msg.get("value")
                 # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
-
-            elif msg.get("param") == "search_step":
-                config.arguments.search_step = msg.get("value")
-                # self.logger.info("<%s> search step set to %d", self.side, msg.get("value"))
+            elif msg.get("param") == "max_radius_cr":
+                config.engine.cr_processor.max_radius = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "preview":
                 config.preview = msg.get("value")

@@ -11,22 +11,126 @@ import cv2
 import eyeloop.config as config
 from eyeloop.constants.processor_constants import *
 from eyeloop.engine.models.circular import Circle
-from eyeloop.engine.models.ellipsoid import Ellipse
+from eyeloop.engine.models.ellipsoid import Ellipse  # noqa: F401
 from vr_core.utilities.logger_setup import setup_logger
 
 
 class Center_class():
     """Center processor for eye features (pupil, corneal reflection)."""
 
-    def fit(self, r):
+    def fit(self, r) -> tuple[float, float]:
+        """Fit the center of the given points.
+
+        Args:
+            r: (N, 2) ndarray of points
+        Returns:
+            Center of the given points
+        """
 
         self.params = tuple(np.mean(r, axis = 0))
         return self.params
 
 
+class Fast_Elliptical:
+    """
+    Faster, center-focused ellipse fit.
+
+    - Uses a linear least-squares fit of a general conic
+        A x^2 + B x y + C y^2 + D x + E y + F = 0
+      with F fixed to -1 (so we solve for A..E).
+    - Extracts center (cx, cy) from the conic via 2x2 solve.
+    - Radius is a robust average distance of points to this center.
+
+    Output:
+        params = ((cx, cy), r_est)
+    """
+
+    def __init__(self):
+        self.params: tuple[tuple[float, float], float] | None = None
+
+    def fit(self, r) -> tuple[tuple[float, float], float]:
+        r = np.asarray(r, dtype=np.float64)
+        if r.ndim != 2 or r.shape[1] != 2:
+            raise ValueError("Fast_Elliptical.fit expects (N, 2) array")
+        n_pts = r.shape[0]
+        if n_pts < 5:
+            # Not enough points for a conic; fall back to simple mean.
+            center = tuple(np.mean(r, axis=0))
+            radii = np.linalg.norm(r - center, axis=1)
+            r_est = float(np.median(radii)) if radii.size > 0 else 0.0
+            center = (float(center[0]), float(center[1]))
+            self.params = (center, r_est)
+            return self.params
+
+        x = r[:, 0]
+        y = r[:, 1]
+
+        # Shift to improve numerical stability (we'll shift back later).
+        x_mean = float(np.mean(x))
+        y_mean = float(np.mean(y))
+        x0 = x - x_mean
+        y0 = y - y_mean
+
+        # Design matrix for A,B,C,D,E with F fixed as -1:
+        # A x^2 + B x y + C y^2 + D x + E y - 1 = 0  -> RHS = 1
+        A_mat = np.column_stack((x0 * x0, x0 * y0, y0 * y0, x0, y0))  # (N, 5)
+        b_vec = np.ones_like(x0)  # (N,)
+
+        try:
+            # Solve A_mat @ p ≈ b_vec  for p=[A,B,C,D,E]
+            p, *_ = np.linalg.lstsq(A_mat, b_vec, rcond=None)
+            A_c, B_c, C_c, D_c, E_c = p
+        except np.linalg.LinAlgError:
+            # Fallback: robust mean center + median radius
+            center = tuple(np.mean(r, axis=0))
+            radii = np.linalg.norm(r - center, axis=1)
+            r_est = float(np.median(radii)) if radii.size > 0 else 0.0
+            center = (float(center[0]), float(center[1]))
+            self.params = (center, r_est)
+            return self.params
+
+        # Solve for center in the shifted coordinates (x0, y0):
+        # [2A  B ] [cx0] = [-D]
+        # [ B 2C] [cy0]   [-E]
+        M = np.array([[2.0 * A_c, B_c],
+                      [B_c,       2.0 * C_c]], dtype=np.float64)
+        rhs = np.array([-D_c, -E_c], dtype=np.float64)
+
+        try:
+            center_local = np.linalg.solve(M, rhs)
+            cx0, cy0 = center_local
+        except np.linalg.LinAlgError:
+            # Degenerate case: revert to mean in shifted coords.
+            cx0, cy0 = 0.0, 0.0
+
+        # Shift back to original coordinates
+        cx = float(cx0 + x_mean)
+        cy = float(cy0 + y_mean)
+        center = (cx, cy)
+
+        # Robust radius: median-based with outlier rejection
+        dists = np.linalg.norm(r - center, axis=1)
+        if dists.size == 0:
+            r_est = 0.0
+        elif dists.size < 5:
+            r_est = float(np.mean(dists))
+        else:
+            med = float(np.median(dists))
+            mad = float(np.median(np.abs(dists - med))) + 1e-6  # avoid div-by-zero
+            # Keep points within ~2.5 MAD of the median distance
+            mask = np.abs(dists - med) < 2.5 * mad
+            if np.any(mask):
+                r_est = float(np.mean(dists[mask]))
+            else:
+                r_est = med
+
+        self.params = (center, r_est)
+        return self.params
+
+
 class Shape():
     """Shape processor for eye features (pupil, corneal reflection)."""
-    def __init__(self, type = 1):
+    def __init__(self, type = 1) -> None:
         self.side = config.arguments.side
 
         self.process_blink = False
@@ -42,7 +146,9 @@ class Shape():
 
         self.type = type
 
-        self.model = config.arguments.model
+        #self.model = config.arguments.model
+        self.model = "elliptical"
+        # self.model = "fast_elliptical"
 
         self.side = config.arguments.side
 
@@ -54,8 +160,13 @@ class Shape():
             self.type_entry = "pupil"
             if self.model == "circular":
                 self.fit_model = Circle(self)
-            else:
+            elif self.model == "elliptical":
                 self.fit_model = Ellipse(self)
+            elif self.model == "fast_elliptical":
+                self.fit_model = Fast_Elliptical()
+            else:
+                self.logger.error(f"Unknown model: {self.model}")
+
             self.apply_thresh = self.pupil_thresh_
 
             # Threshold settings ----------------------------------------------
@@ -76,7 +187,7 @@ class Shape():
             self.w_d = 0.2   # Score weight for distance to previous center
 
             # Radius filter settings -----------------------------------------
-            self.radius_drop_factor = 0.95 # Maximum drop factor for radius in one frame
+            self.radius_drop_factor = 0.0 # Maximum drop factor for radius in one frame
             radius_buffer_size = 20 # Size of the buffer for radius filtering
 
             self.radius_buffer = collections.deque(maxlen=radius_buffer_size)
@@ -111,14 +222,6 @@ class Shape():
 
         self.last_min_radius = self.min_radius
         self.compute_threshold()
-        self.logger.info(
-            "Type: %s_%s; Min_radius: %s; Max_radius: %s; Threshold: %s",
-            config.arguments.side,
-            self.type_entry,
-            self.min_radius,
-            self.max_radius,
-            self.threshold
-        )
 
         self.time_start: float | None = None
         self.time_threshold: float | None = None
@@ -130,9 +233,17 @@ class Shape():
     def compute_threshold(self) -> None:
         """Computes the threshold for pupil detection based on min_radius."""
         self.threshold = len(crop_stock) * self.min_radius * 1.05
+        self.logger.info(
+            "Type: %s_%s; Min_radius: %s; Max_radius: %s; Threshold: %s",
+            config.arguments.side,
+            self.type_entry,
+            self.min_radius,
+            self.max_radius,
+            self.threshold
+        )
 
 
-    def track(self, source):
+    def track(self, source) -> None:
         """Tracks the eye feature in the given source image."""
         self.time_start = time.perf_counter_ns() / 1e9
 
@@ -179,7 +290,7 @@ class Shape():
         # self._log_timings()
 
 
-    def pupil_thresh_(self):
+    def pupil_thresh_(self) -> None:
         self.source[:] = cv2.threshold(
             cv2.GaussianBlur(
                 cv2.erode(self.source, kernel, iterations = 1),
@@ -192,7 +303,7 @@ class Shape():
         )[1]
 
 
-    def cr_thresh_(self):
+    def cr_thresh_(self) -> None:
         _, self.source[:] = cv2.threshold(
             cv2.GaussianBlur(self.source, self.blur, 0),
             self.binarythreshold,
@@ -201,21 +312,27 @@ class Shape():
         )
 
 
-    def fit(self):
+    def fit(self) -> None:
         try:
             r = self.pupil_walkout()
-            self.center = self.fit_model.fit(r)
-
+            fit_params = self.fit_model.fit(r)
+            # self.logger.info("Pupil fit success.")
             self.time_fit_model = time.perf_counter_ns() / 1e9
 
-            # raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+            self.center = fit_params[0]
 
-            frame_valid = self.radius_filter()
+            # raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
+            try:
+                frame_valid = self.radius_filter()
+            # frame_valid = True
+            except Exception as e:
+                self.logger.error(f"Radius filter error: {e}")
+                frame_valid = True
 
             if self.type_entry is not None and self.fit_model.params is not None:
                 if frame_valid:
                     # Normal tracking output
-                    config.engine.dataout[self.type_entry] = self.fit_model.params
+                    config.engine.dataout[self.type_entry] = fit_params
                 else:
                     # Snap: return empty output
                     config.engine.dataout[self.type_entry] = ()
@@ -224,15 +341,15 @@ class Shape():
             #     self.logger.info("raw=%.3f filtered=%.3f", raw_r, self.fit_model.params[1])
 
         except IndexError as e:  # noqa: F841
-            # self.logger.info("Fit index error")
+            # self.logger.info(f"Fit index error: {e}")
             self.backup_fit()
 
-        except Exception:
-            # self.logger.info(f"Fit-func error")
+        except Exception as e:  # noqa: F841
+            # self.logger.info(f"Fit-func error: {e}")
             self.backup_fit()
 
 
-    def backup_fit(self):
+    def backup_fit(self) -> None:
         """Backup fitting method.
 
         Uses distance transform and if that fails as well, falls back to HoughCircles.
@@ -240,15 +357,16 @@ class Shape():
         if self.center_adj_dt():
             self.dt_fail_count = 0
         else:
-            config.engine.dataout[self.type_entry] = ()
-            self.dt_fail_count += 1
-            if self.dt_fail_count >= self.dt_fail_limit:
-                # self.logger.info(
-                #     "DT adjustment failed %d times (exception), falling back to HoughCircles.",
-                #     self.dt_fail_count,
-                # )
-                self.center_adj_hc()
-                self.dt_fail_count = 0
+            pass
+            # config.engine.dataout[self.type_entry] = ()
+            # self.dt_fail_count += 1
+            # if self.dt_fail_count >= self.dt_fail_limit:
+            #     # self.logger.info(
+            #     #     "DT adjustment failed %d times (exception), falling back to HoughCircles.",
+            #     #     self.dt_fail_count,
+            #     # )
+            #     self.center_adj_hc()
+            #     self.dt_fail_count = 0
 
 
     def radius_filter(self) -> bool:
@@ -257,9 +375,7 @@ class Shape():
             self.logger.error("No previous fit parameters, skipping frame.")
             return False
 
-        cxcy, rx, ry, ang = self.fit_model.params
-        new_radius = (rx + ry) / 2.0
-        filtered_center = cxcy
+        (filtered_center, new_radius) = self.fit_model.params
 
         self.radius_buffer.append(new_radius)
 
@@ -293,14 +409,17 @@ class Shape():
         self.filtered_center = filtered_center
 
         self.center = filtered_center
-        self.fit_model.params = (filtered_center, filtered_r, filtered_r, ang)
+        try:
+            self.fit_model.params = ((float(filtered_center[0]), float(filtered_center[1])), float(filtered_r),)
+        except Exception as e:
+            self.logger.error(f"2. Error setting fit parameters: {e}")
 
         self.time_radius_filter = time.perf_counter_ns() / 1e9
 
         return not is_snap
 
 
-    def pupil_walkout(self):
+    def pupil_walkout(self) -> np.ndarray:
         try:
             center = np.round(self.center).astype(int)
             # self.logger.info("Pupil walkout with center: %s", center)
@@ -439,7 +558,7 @@ class Shape():
 
             if np.sum(crop_list) < self.threshold:
                 # self.logger.warning("Pupil walkout failed: insufficient edge points found.")
-                raise IndexError
+                raise IndexError("Pupil walkout failed: crop_list sum: %s !> threshold: %s", np.sum(crop_list), self.threshold)
 
         # radius = np.sum(crop_list) / (len(crop_stock) * 1.05)
         # self.logger.info("Estimated pupil radius: %.2f", radius)
@@ -455,10 +574,10 @@ class Shape():
 
         self.time_walkout = time.perf_counter_ns() / 1e9
 
-        return self.cond(r, crop_list)
+        return self.cond(r)
 
 
-    def cond(self, r, crop_list):
+    def cond(self, r) -> np.ndarray:
         dists =  np.linalg.norm(np.mean(r,  axis = 0,dtype=np.float64) - r, axis = 1)
 
         mean_ = np.mean(dists)
@@ -603,11 +722,12 @@ class Shape():
             top_n = min(max_blobs, len(candidates))
             for i in range(top_n):
                 (cx, cy), r_est, circularity, _score = candidates[i]
-                self.dt_blobs.append(((int(cx), int(cy)), float(r_est)))
+                self.dt_blobs.append(((float(cx), float(cy)), float(r_est)))
 
             if self.type_entry == "cr":
                 config.engine.dataout[self.type_entry] = self.dt_blobs
             elif self.type_entry == "pupil":
+                self.logger.info("center_adj_dt fit success with center: %s.", self.dt_blobs[0][0])
                 best_center, best_radius = self.dt_blobs[0]
                 self.center = best_center
             else:
@@ -621,7 +741,7 @@ class Shape():
             return False
 
 
-    def center_adj_hc(self):
+    def center_adj_hc(self) -> None:
         #adjust settings:
         # blurred = cv2.GaussianBlur(self.raw, (3, 3), 2)
         if self.type_entry == "cr":
@@ -677,7 +797,7 @@ class Shape():
         self.time_center_adj_hc = time.perf_counter_ns() / 1e9
 
 
-    def distance(self, a, b):
+    def distance(self, a, b) -> float:
         return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
 
@@ -714,8 +834,8 @@ class Shape():
                 )
                 pass
             else:
+                self.logger.warning("Incomplete timing information.")
                 pass
-                # self.logger.warning("Incomplete timing information.")
 
         except Exception as e:
             self.logger.warning("Timing log error: %s", e)

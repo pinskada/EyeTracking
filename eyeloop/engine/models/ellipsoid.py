@@ -8,17 +8,18 @@ np.seterr('raise')
 class Ellipse:
     def __init__(self, processor):
         self.shape_processor = processor
-        self.params: Optional[tuple[tuple[float, float], float, float, float]] = None
+        self.params: Optional[tuple[tuple[float, float], float]] = None
         self.coef: Optional[np.ndarray] = None
 
-    def fit(self, r: np.ndarray):
+    def fit(self, r: np.ndarray) -> tuple[tuple[float, float], float]:
         """
         Least-squares ellipse fit (Halir & Flusser) implemented with ndarrays.
 
-        r : (N, 2) ndarray of edge points (x, y)
+        Args:
+            r: (N, 2) ndarray of edge points (x, y)
+        Returns:
+            Center of the fitted ellipse (x0, y0)
         """
-        # ---- NO try/except here: let caller handle failures ----
-
         # Ensure ndarray + float64 for numerical stability
         r = np.asarray(r, dtype=np.float64)
         x = r[:, 0]
@@ -122,12 +123,15 @@ class Ellipse:
         height = np.sqrt(numerator / denominator2)
 
         # Rotation angle in degrees
-        phi = 0.5 * np.arctan2(2.0 * b, ac_subtr)
-        angle_deg = float(np.rad2deg(phi) % 360.0)
+        # phi = 0.5 * np.arctan2(2.0 * b, ac_subtr)
+        # angle_deg = float(np.rad2deg(phi) % 360.0)
 
-        self.params = ((float(x0), float(y0)),
-                       float(width),
-                       float(height),
-                       angle_deg)
+        # self.params = ((float(x0), float(y0)),
+        #                float(width),
+        #                float(height),
+        #                angle_deg)
+        aproximate_radius = (float(width) + float(height)) / 2.0
+        center = (float(x0), float(y0))
+        self.params = (center, aproximate_radius)
 
-        return self.params[0]
+        return self.params

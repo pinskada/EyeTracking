@@ -6,8 +6,6 @@
 import numpy as np
 np.seterr('raise')
 
-from eyeloop.utilities.general_operations import tuple_int
-
 
 class Circle:
     def __init__(self, processor) -> None:
@@ -15,22 +13,20 @@ class Circle:
         self.fit = self.hyper_fit
         self.params = None
 
-    def hyper_fit(self, r) -> tuple:
+    def hyper_fit(self, r) -> tuple[tuple[float, float], float]:
         """
         Fits coords to circle using hyperfit algorithm.
-        Inputs:
+
+        Args:
             - coords, list or numpy array with len>2 of the form:
             [
-        [x_coord, y_coord],
-        ...,
-        [x_coord, y_coord]
-        ]
+                [x_coord, y_coord],
+                ...,
+                [x_coord, y_coord]
+            ]
             or numpy array of shape (n, 2)
-        Outputs:
-            - xc : x-coordinate of solution center (float)
-            - yc : y-coordinate of solution center (float)
-            - R : Radius of solution (float)
-            - residu : s, sigma - variance of data wrt solution (float)
+        Returns:
+            - ((x_center, y_center), radius)
         """
         X, Y = r[:,0], r[:,1]
         n = X.shape[0]
@@ -60,13 +56,16 @@ class Circle:
         try:
             Xcenter = (Mxz * Myy - Myz * Mxy)/ det
             Ycenter = (Myz * Mxx - Mxz * Mxy)/ det
-        except:
-            return False
+        except Exception:
+            raise IndexError("Error computing x and y center")
 
-        x = Xcenter + mean_X
-        y = Ycenter + mean_Y
-        r = np.sqrt(Xcenter ** 2 + Ycenter ** 2 + Mz)
-        self.params = ((x, y), r, r, 0)
+        x = float(Xcenter + mean_X)
+        y = float(Ycenter + mean_Y)
+        r = float(np.sqrt(Xcenter ** 2 + Ycenter ** 2 + Mz))
+
+        self.center = (x, y)
+
+        self.params = (self.center, r)
         #self.center, self.width, self.height, self.angle = self.params
 
-        return self.params[0]
+        return self.params

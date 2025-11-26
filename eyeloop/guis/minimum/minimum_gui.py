@@ -90,10 +90,17 @@ class GUI:
             cv2.moveWindow(self.cr_bin, x_shift, 2 * height + 60)
 
 
-    def place_cross(self, source: np.ndarray, point: tuple, color: tuple, thickness: int, size: int) -> None:
+    def place_cross(
+        self,
+        source: np.ndarray,
+        center: tuple[float, float],
+        color: tuple[float, float, float],
+        thickness: int,
+        size: int
+    ) -> None:
         try:
-            source[to_int(point[1] - size):to_int(point[1] + size-1), to_int(point[0]-thickness):to_int(point[0]+thickness)] = color
-            source[to_int(point[1]-thickness):to_int(point[1]+thickness), to_int(point[0] - size):to_int(point[0] + size-1)] = color
+            source[to_int(center[1] - size):to_int(center[1] + size-1), to_int(center[0]-thickness):to_int(center[0]+thickness)] = color
+            source[to_int(center[1]-thickness):to_int(center[1]+thickness), to_int(center[0] - size):to_int(center[0] + size-1)] = color
         except Exception:
             pass
 
@@ -101,10 +108,9 @@ class GUI:
     def pupil(self, source_rgb):
         if config.engine.dataout["pupil"]:
             try:
-                pupil_center, pupil_width, pupil_height, pupil_angle = config.engine.dataout["pupil"]
-                #self.logger.info("pupil radius: %s", pupil_width)
-                cv2.ellipse(source_rgb, tuple_int(pupil_center), tuple_int((pupil_width, pupil_height)), pupil_angle, 0, 360, red, 1)  # noqa: F405
-                self.place_cross(source_rgb, pupil_center, red, 1, 20)  # noqa: F405
+                ((pupil_center_x, pupil_center_y), pupil_radius) = config.engine.dataout["pupil"]
+                cv2.ellipse(source_rgb, tuple_int((pupil_center_x, pupil_center_y)), tuple_int((pupil_radius, pupil_radius)), 0, 0, 360, red, 1)  # noqa: F405
+                self.place_cross(source_rgb, (pupil_center_x, pupil_center_y), red, 1, 20)  # noqa: F405
             except Exception as e:
                 self.logger.error(f"Pupil mark error: {e}")
         if config.engine.dataout["cr"]:

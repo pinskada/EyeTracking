@@ -184,7 +184,7 @@ class Shape():
 
             self.w_r = 0.4   # Score weight for radius
             self.w_c = 0.4   # Score weight for circularity
-            self.w_d = 0.2   # Score weight for distance to previous center
+            self.w_d = 0.5   # Score weight for distance to previous center
 
             # Radius filter settings -----------------------------------------
             self.radius_drop_factor = 0.0 # Maximum drop factor for radius in one frame
@@ -287,7 +287,7 @@ class Shape():
         else:
             self.center_adj_dt()
 
-        self._log_timings()
+        # self._log_timings()
 
 
     def pupil_thresh_(self) -> None:
@@ -419,176 +419,344 @@ class Shape():
         return not is_snap
 
 
-    def pupil_walkout(self) -> np.ndarray:
-        try:
-            center = np.round(self.center).astype(int)
-            # self.logger.info("Pupil walkout with center: %s", center)
-        except Exception:
+    # def pupil_walkout(self) -> np.ndarray:
+    #     try:
+    #         center = np.round(self.center).astype(int)
+    #         # self.logger.info("Pupil walkout with center: %s", center)
+    #     except Exception:
+    #         raise Exception("No center available for pupil walkout.")
+
+    #     canvas = np.array(self.source, dtype=int)
+    #     canvas[-1,:] = canvas[:,-1] = canvas[0,:] = canvas[:,0] = 0
+
+    #     r = rr_2d.copy()
+
+    #     crop_list = crop_stock.copy()
+
+    #     canvas_ = canvas[center[1]:, center[0]:]
+    #     canv_shape0, canv_shape1 = canvas_.shape
+    #     crop_canvas = np.flip(canvas[:center[1], :center[0]])
+    #     crop_canv_shape0, crop_canv_shape1 = crop_canvas.shape
+
+    #     crop_canvas2 = np.fliplr(canvas[center[1]:, :center[0]])
+    #     crop_canv2_shape0, crop_canv2_shape1 = crop_canvas2.shape
+
+    #     crop_canvas3 = np.flipud(canvas[:center[1], center[0]:])
+    #     crop_canv3_shape0, crop_canv3_shape1 = crop_canvas3.shape
+
+    #     canvas2 = np.flip(canvas) # flip once
+
+    #     crop_list=np.array([
+    #         np.argmax(canvas_[:, 0][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[0, :][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[main_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[main_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[main_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[main_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas2[-center[1], -center[0]:][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas2[-center[1]:, -center[0]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[ half_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[half_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[half_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[half_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[invhalf_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[invhalf_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[invhalf_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[invhalf_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[fourth_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[fourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[fourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[fourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[invfourth_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[invfourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[invfourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[invfourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[third_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[third_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[third_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[third_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(canvas_[invthird_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas2[invthird_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
+    #         np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0)
+    #     ], dtype=int) + self.min_radius
+
+    #     # self.logger.info("1. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
+    #     # self.logger.info(crop_list)
+
+    #     if np.sum(crop_list) < self.threshold:
+    #         #origin inside corneal reflection?
+    #         offset_list = np.array([
+    #             np.argmax(canvas_[:, 0][1:] == 255), np.argmax(canvas_[0, :][1:] == 255),
+    #             np.argmax(canvas_[main_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[main_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[main_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[main_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
+    #             np.argmax(canvas2[-center[1], -center[0]:][1:] == 255), np.argmax(canvas2[-center[1]:, -center[0]][1:] == 255),
+    #             np.argmax(canvas_[ half_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[half_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[half_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[half_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
+    #             np.argmax(canvas_[invhalf_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[invhalf_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[invhalf_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[invhalf_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
+    #             np.argmax(canvas_[fourth_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[fourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[fourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[fourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(canvas_[invfourth_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[invfourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[invfourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[invfourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
+    #             np.argmax(canvas_[third_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[third_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[third_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[third_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
+    #             np.argmax(canvas_[invthird_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas2[invthird_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
+    #             np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255)
+    #         ], dtype=int) + 1
+
+    #         crop_list=np.array([
+    #         np.argmax(canvas_[:, 0][offset_list[0]:] == 0),
+    #         np.argmax(canvas_[0, :][offset_list[1]:] == 0),
+    #         np.argmax(canvas_[main_diagonal[:canv_shape0, :canv_shape1]][offset_list[2]:] == 0),
+    #         np.argmax(crop_canvas[main_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[3]:] == 0),
+    #         np.argmax(crop_canvas2[main_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[4]:] == 0),
+    #         np.argmax(crop_canvas3[main_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[5]:] == 0),
+    #         np.argmax(canvas2[-center[1], -center[0]:][offset_list[6]:] == 0),
+    #         np.argmax(canvas2[-center[1]:, -center[0]][offset_list[7]:] == 0),
+    #         np.argmax(canvas_[ half_diagonal[:canv_shape0, :canv_shape1]][offset_list[8]:] == 0),
+    #         np.argmax(crop_canvas[half_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[9]:] == 0),
+    #         np.argmax(crop_canvas2[half_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[10]:] == 0),
+    #         np.argmax(crop_canvas3[half_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[11]:] == 0),
+    #         np.argmax(canvas_[invhalf_diagonal[:canv_shape0, :canv_shape1]][offset_list[12]:] == 0),
+    #         np.argmax(crop_canvas[invhalf_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[13]:] == 0),
+    #         np.argmax(crop_canvas2[invhalf_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[14]:] == 0),
+    #         np.argmax(crop_canvas3[invhalf_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[15]:] == 0),
+    #         np.argmax(canvas_[fourth_diagonal[:canv_shape0, :canv_shape1]][offset_list[16]:] == 0),
+    #         np.argmax(crop_canvas3[fourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[17]:] == 0),
+    #         np.argmax(crop_canvas[fourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[18]:] == 0),
+    #         np.argmax(crop_canvas2[fourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[19]:] == 0),
+    #         np.argmax(canvas_[invfourth_diagonal[:canv_shape0, :canv_shape1]][offset_list[20]:] == 0),
+    #         np.argmax(crop_canvas2[invfourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[21]:] == 0),
+    #         np.argmax(crop_canvas[invfourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[22]:] == 0),
+    #         np.argmax(crop_canvas3[invfourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[23]:] == 0),
+    #         np.argmax(canvas_[third_diagonal[:canv_shape0, :canv_shape1]][offset_list[24]:] == 0),
+    #         np.argmax(crop_canvas2[third_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[25]:] == 0),
+    #         np.argmax(crop_canvas[third_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[26]:] == 0),
+    #         np.argmax(crop_canvas3[third_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[27]:] == 0),
+    #         np.argmax(canvas_[invthird_diagonal[:canv_shape0, :canv_shape1]][offset_list[28]:] == 0),
+    #         np.argmax(crop_canvas2[invthird_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[29]:] == 0),
+    #         np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[30]:] == 0),
+    #         np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[31]:] == 0)
+    #         ], dtype=int) + offset_list
+
+    #         # self.logger.info("2. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
+
+    #         if np.sum(crop_list) < self.threshold:
+    #             # self.logger.warning("Pupil walkout failed: insufficient edge points found.")
+    #             raise IndexError("Pupil walkout failed: crop_list sum: %s !> threshold: %s", np.sum(crop_list), self.threshold)
+
+    #     radius = np.sum(crop_list) / (len(crop_stock) * 1.05)
+    #     self.logger.info("Estimated pupil radius: %.2f", radius)
+
+    #     r[:8,:] = center
+    #     r[ry_add, 1] += crop_list[ry_add]
+    #     r[rx_add, 0] += crop_list[rx_add]
+    #     r[ry_subtract, 1] -= crop_list[ry_subtract]
+    #     r[rx_subtract, 0] -= crop_list[rx_subtract]
+    #     r[rx_multiplied, 0] *= rx_multiply
+    #     r[ry_multiplied, 1] *= ry_multiply
+    #     r[8:,:] += center
+
+    #     self.time_walkout = time.perf_counter_ns() / 1e9
+
+    #     return self.cond(r)
+
+    def pupil_walkout(self):
+        """
+        Radial walkout from the current center on a cleaned pupil mask.
+
+        - Fills small CR holes and artifacts inside the pupil.
+        - Uses a local ROI around the center for speed.
+        - Casts multiple rays and finds the pupil boundary as the first
+        255 -> 0 transition along each ray.
+        - Returns boundary points filtered by `cond()`.
+        """
+        if self.center is None or not isinstance(self.center, (tuple, list, np.ndarray)):
             raise Exception("No center available for pupil walkout.")
 
-        canvas = np.array(self.source, dtype=int)
-        canvas[-1,:] = canvas[:,-1] = canvas[0,:] = canvas[:,0] = 0
+        cx, cy = np.round(self.center).astype(int)
 
-        r = rr_2d.copy()
+        canvas = self.source
+        if canvas is None:
+            raise Exception("No source image for pupil walkout.")
 
-        crop_list = crop_stock.copy()
+        h, w = canvas.shape[:2]
 
-        canvas_ = canvas[center[1]:, center[0]:]
-        canv_shape0, canv_shape1 = canvas_.shape
-        crop_canvas = np.flip(canvas[:center[1], :center[0]])
-        crop_canv_shape0, crop_canv_shape1 = crop_canvas.shape
+        # Clamp center to valid range (avoid out-of-bounds)
+        cx = int(np.clip(cx, 1, w - 2))
+        cy = int(np.clip(cy, 1, h - 2))
 
-        crop_canvas2 = np.fliplr(canvas[center[1]:, :center[0]])
-        crop_canv2_shape0, crop_canv2_shape1 = crop_canvas2.shape
+        # ---------- 1) Build local ROI around center ----------
+        # Margin just a bit larger than max_radius
+        margin = int(self.max_radius + 4)
 
-        crop_canvas3 = np.flipud(canvas[:center[1], center[0]:])
-        crop_canv3_shape0, crop_canv3_shape1 = crop_canvas3.shape
+        x0 = max(cx - margin, 0)
+        x1 = min(cx + margin, w - 1)
+        y0 = max(cy - margin, 0)
+        y1 = min(cy + margin, h - 1)
 
-        canvas2 = np.flip(canvas) # flip once
+        roi = canvas[y0:y1 + 1, x0:x1 + 1]
 
-        crop_list=np.array([
-            np.argmax(canvas_[:, 0][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[0, :][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[main_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[main_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[main_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[main_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas2[-center[1], -center[0]:][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas2[-center[1]:, -center[0]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[ half_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[half_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[half_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[half_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[invhalf_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[invhalf_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[invhalf_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[invhalf_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[fourth_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[fourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[fourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[fourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[invfourth_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[invfourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[invfourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[invfourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[third_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[third_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[third_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[third_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(canvas_[invthird_diagonal[:canv_shape0, :canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas2[invthird_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][self.min_radius:self.max_radius] == 0),
-            np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][self.min_radius:self.max_radius] == 0)
-        ], dtype=int) + self.min_radius
+        # Local center coords inside ROI
+        rcx = cx - x0
+        rcy = cy - y0
 
-        # self.logger.info("1. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
-        # self.logger.info(crop_list)
+        # ---------- 2) Keep only largest pupil component & fill holes ----------
+        # Pupil pixels are 255 after THRESH_BINARY_INV
+        pupil_mask = (roi == 255).astype(np.uint8)
 
-        if np.sum(crop_list) < self.threshold:
-            #origin inside corneal reflection?
-            offset_list = np.array([
-                np.argmax(canvas_[:, 0][1:] == 255), np.argmax(canvas_[0, :][1:] == 255),
-                np.argmax(canvas_[main_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas[main_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[main_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[main_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
-                np.argmax(canvas2[-center[1], -center[0]:][1:] == 255), np.argmax(canvas2[-center[1]:, -center[0]][1:] == 255),
-                np.argmax(canvas_[ half_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas[half_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[half_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[half_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
-                np.argmax(canvas_[invhalf_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas[invhalf_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[invhalf_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[invhalf_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
-                np.argmax(canvas_[fourth_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[fourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
-                np.argmax(crop_canvas[fourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[fourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(canvas_[invfourth_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[invfourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(crop_canvas[invfourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[invfourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
-                np.argmax(canvas_[third_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[third_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(crop_canvas[third_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[third_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255),
-                np.argmax(canvas_[invthird_diagonal[:canv_shape0, :canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas2[invthird_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][1:] == 255),
-                np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][1:] == 255),
-                np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][1:] == 255)
-            ], dtype=int) + 1
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+            pupil_mask, connectivity=8
+        )
 
-            crop_list=np.array([
-            np.argmax(canvas_[:, 0][offset_list[0]:] == 0),
-            np.argmax(canvas_[0, :][offset_list[1]:] == 0),
-            np.argmax(canvas_[main_diagonal[:canv_shape0, :canv_shape1]][offset_list[2]:] == 0),
-            np.argmax(crop_canvas[main_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[3]:] == 0),
-            np.argmax(crop_canvas2[main_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[4]:] == 0),
-            np.argmax(crop_canvas3[main_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[5]:] == 0),
-            np.argmax(canvas2[-center[1], -center[0]:][offset_list[6]:] == 0),
-            np.argmax(canvas2[-center[1]:, -center[0]][offset_list[7]:] == 0),
-            np.argmax(canvas_[ half_diagonal[:canv_shape0, :canv_shape1]][offset_list[8]:] == 0),
-            np.argmax(crop_canvas[half_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[9]:] == 0),
-            np.argmax(crop_canvas2[half_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[10]:] == 0),
-            np.argmax(crop_canvas3[half_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[11]:] == 0),
-            np.argmax(canvas_[invhalf_diagonal[:canv_shape0, :canv_shape1]][offset_list[12]:] == 0),
-            np.argmax(crop_canvas[invhalf_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[13]:] == 0),
-            np.argmax(crop_canvas2[invhalf_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[14]:] == 0),
-            np.argmax(crop_canvas3[invhalf_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[15]:] == 0),
-            np.argmax(canvas_[fourth_diagonal[:canv_shape0, :canv_shape1]][offset_list[16]:] == 0),
-            np.argmax(crop_canvas3[fourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[17]:] == 0),
-            np.argmax(crop_canvas[fourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[18]:] == 0),
-            np.argmax(crop_canvas2[fourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[19]:] == 0),
-            np.argmax(canvas_[invfourth_diagonal[:canv_shape0, :canv_shape1]][offset_list[20]:] == 0),
-            np.argmax(crop_canvas2[invfourth_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[21]:] == 0),
-            np.argmax(crop_canvas[invfourth_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[22]:] == 0),
-            np.argmax(crop_canvas3[invfourth_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[23]:] == 0),
-            np.argmax(canvas_[third_diagonal[:canv_shape0, :canv_shape1]][offset_list[24]:] == 0),
-            np.argmax(crop_canvas2[third_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[25]:] == 0),
-            np.argmax(crop_canvas[third_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[26]:] == 0),
-            np.argmax(crop_canvas3[third_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[27]:] == 0),
-            np.argmax(canvas_[invthird_diagonal[:canv_shape0, :canv_shape1]][offset_list[28]:] == 0),
-            np.argmax(crop_canvas2[invthird_diagonal[:crop_canv2_shape0, :crop_canv2_shape1]][offset_list[29]:] == 0),
-            np.argmax(crop_canvas[invthird_diagonal[:crop_canv_shape0, :crop_canv_shape1]][offset_list[30]:] == 0),
-            np.argmax(crop_canvas3[invthird_diagonal[:crop_canv3_shape0, :crop_canv3_shape1]][offset_list[31]:] == 0)
-            ], dtype=int) + offset_list
+        if num_labels <= 1:
+            # No foreground at all inside ROI
+            raise IndexError("pupil_walkout: no pupil component in ROI")
 
-            # self.logger.info("2. Crop_list sum: %s; threshold: %s", np.sum(crop_list), self.threshold)
+        # Find largest non-background component (label > 0)
+        areas = stats[1:, cv2.CC_STAT_AREA]
+        largest_label = int(1 + np.argmax(areas))
 
-            if np.sum(crop_list) < self.threshold:
-                # self.logger.warning("Pupil walkout failed: insufficient edge points found.")
-                raise IndexError("Pupil walkout failed: crop_list sum: %s !> threshold: %s", np.sum(crop_list), self.threshold)
+        cleaned = (labels == largest_label).astype(np.uint8)
 
-        # radius = np.sum(crop_list) / (len(crop_stock) * 1.05)
-        # self.logger.info("Estimated pupil radius: %.2f", radius)
+        # Morphological closing to fill small holes (CRs) inside pupil
+        # Kernel size 3x3 is usually enough; you can tune to (5,5) if CRs are bigger
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel_close)
 
-        r[:8,:] = center
-        r[ry_add, 1] += crop_list[ry_add]
-        r[rx_add, 0] += crop_list[rx_add]
-        r[ry_subtract, 1] -= crop_list[ry_subtract]
-        r[rx_subtract, 0] -= crop_list[rx_subtract]
-        r[rx_multiplied, 0] *= rx_multiply
-        r[ry_multiplied, 1] *= ry_multiply
-        r[8:,:] += center
+        # Re-binarize to 0/255
+        cleaned = (cleaned * 255).astype(np.uint8)
+
+        # ---------- 3) Make sure center lies inside cleaned pupil ----------
+        if cleaned[rcy, rcx] == 0:
+            ys, xs = np.where(cleaned > 0)
+            if xs.size == 0:
+                raise IndexError("pupil_walkout: cleaned pupil is empty")
+
+            # Snap center to nearest pupil pixel
+            d2 = (xs - rcx) ** 2 + (ys - rcy) ** 2
+            idx = int(np.argmin(d2))
+            rcx, rcy = int(xs[idx]), int(ys[idx])
+
+        # ---------- 4) Radial ray casting ----------
+        # Number of rays: tuneable. 32 is a good compromise.
+        n_rays = 32
+        angles = np.linspace(0.0, 2.0 * np.pi, n_rays, endpoint=False)
+
+        min_r = max(1, int(self.min_radius))
+        max_r = int(self.max_radius)
+
+        points = []
+
+        for theta in angles:
+            dx = float(np.cos(theta))
+            dy = float(np.sin(theta))
+
+            hit = None
+            inside_seen = False
+
+            # Walk from min_radius to max_radius along this ray
+            for r in range(min_r, max_r):
+                x = int(round(rcx + dx * r))
+                y = int(round(rcy + dy * r))
+
+                if x <= 0 or x >= (x1 - x0) or y <= 0 or y >= (y1 - y0):
+                    break
+
+                val = cleaned[y, x]
+
+                if val == 255:
+                    # We're inside pupil
+                    inside_seen = True
+                    continue
+
+                # We were inside pupil and now hit 0 -> boundary
+                if inside_seen and val == 0:
+                    hit = (x, y)
+                    break
+
+            if hit is not None:
+                # Convert back to full-image coordinates
+                gx = hit[0] + x0
+                gy = hit[1] + y0
+                points.append((gx, gy))
+
+        if len(points) < 10:
+            # Not enough valid boundary samples -> let dt backup handle it
+            raise IndexError(
+                f"pupil_walkout: insufficient boundary points ({len(points)})"
+            )
+
+        r = np.asarray(points, dtype=np.float64)
 
         self.time_walkout = time.perf_counter_ns() / 1e9
 
         return self.cond(r)
 
 
-    def cond(self, r) -> np.ndarray:
-        dists =  np.linalg.norm(np.mean(r,  axis = 0,dtype=np.float64) - r, axis = 1)
+    # def cond(self, r) -> np.ndarray: # OLD
+    #     dists =  np.linalg.norm(np.mean(r,  axis = 0,dtype=np.float64) - r, axis = 1)
 
-        mean_ = np.mean(dists)
-        std_ = np.std(dists)
+    #     mean_ = np.mean(dists)
+    #     std_ = np.std(dists)
 
-        lower = mean_ - std_
-        upper =  mean_ + std_ * .8
-        cond_ = np.logical_and(np.greater_equal(dists, lower), np.less(dists, upper))
+    #     lower = mean_ - std_
+    #     upper =  mean_ + std_ * .8
+    #     cond_ = np.logical_and(np.greater_equal(dists, lower), np.less(dists, upper))
 
-        return r[cond_]
+    #     return r[cond_]
 
+
+    def cond(self, r):
+        """
+        Robustly filter boundary points based on distance from their mean center.
+
+        Uses median + MAD (median absolute deviation) to remove outliers,
+        which makes it much more tolerant to a few bad rays (e.g. from eyelashes
+        or remaining artifacts).
+        """
+        r = np.asarray(r, dtype=np.float64)
+        if r.ndim != 2 or r.shape[1] != 2:
+            raise ValueError("cond expects (N, 2) array")
+
+        if r.shape[0] < 5:
+            # Too few points to meaningfully filter; just return as-is
+            return r
+
+        center = np.mean(r, axis=0)
+        dists = np.linalg.norm(r - center, axis=1)
+
+        med = float(np.median(dists))
+        mad = float(np.median(np.abs(dists - med))) + 1e-6  # avoid div-by-zero
+
+        # z-score using MAD; 0.6745 scales MAD to ~std for Gaussian
+        z = 0.6745 * (dists - med) / mad
+
+        # Keep points within |z| < 2.5 (tunable)
+        mask = np.abs(z) < 2.5
+
+        r_filt = r[mask]
+
+        # If filtering kills too many points, fall back to original
+        if r_filt.shape[0] < max(8, r.shape[0] // 3):
+            return r
+
+        return r_filt
 
     def center_adj_dt(self) -> bool:
         """

@@ -241,8 +241,9 @@ class Fast_Elliptical_Stable:
             r_raw = float(np.mean(dists[mask])) if np.any(mask) else med
 
         # Temporal smoothing + jump limiting
-        center_smooth, r_smooth = self._smooth(center, r_raw)
-
+        # center_smooth, r_smooth = self._smooth(center, r_raw)
+        center_smooth = center
+        r_smooth = r_raw
         self.params = ( (float(center_smooth[0]), float(center_smooth[1])),
                         float(r_smooth) )
         return self.params

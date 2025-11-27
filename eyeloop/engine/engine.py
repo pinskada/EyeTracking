@@ -29,8 +29,8 @@ class Engine:
         self.height: int
         self.center: tuple[int, int]
 
-        self.pupil_processor = Shape()
-        self.cr_processor = Shape(2)
+        self.pupil_processor = Shape(track_type="pupil")
+        self.cr_processor = Shape(track_type="cr")
         # self.cr_processor = None
 
         # Initialize dataout attribute

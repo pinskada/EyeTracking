@@ -8,8 +8,7 @@ PROJECT_DIR = EYELOOP_DIR.parent
 
 
 class Arguments:
-    """
-    Parses all command-line arguments and config.pupt parameters.
+    """Parses all command-line arguments and config.pupt parameters.
     """
 
     def __init__(self, args) -> None:
@@ -41,8 +40,7 @@ class Arguments:
     @staticmethod
     def parse_args(args):
         """Parses command-line arguments."""
-
-        parser = argparse.ArgumentParser(description='Help list')
+        parser = argparse.ArgumentParser(description="Help list")
         parser.add_argument("-v", "--video", default="0", type=str,
                             help="Input a video sequence for offline processing.")
 
@@ -62,8 +60,8 @@ class Arguments:
                             default=1, type=float,
                             help="Scale the stream (default: 1; 0-1)")
 
-        parser.add_argument("-m", "--model", default="circular", type=str,
-                            help="Set pupil model type (circular; ellipsoid = default).")
+        parser.add_argument("-m", "--model", default="fast_elliptical", type=str,
+                            help="Set pupil model type (circular; elliprtical; fast_elliptical = default).")
 
         parser.add_argument("-ma", "--markers", default=0, type=int,
                             help="Enable/disable artifact removing markers "
@@ -132,8 +130,8 @@ class Arguments:
 
         self.markers = parsed_args.markers
         # Handle quotes used in arguments
-        self.video = Path(parsed_args.video.strip("\'\"")).absolute()
-        self.output_dir = Path(parsed_args.output_dir.strip("\'\"")).absolute()
+        self.video = Path(parsed_args.video.strip("'\"")).absolute()
+        self.output_dir = Path(parsed_args.output_dir.strip("'\"")).absolute()
         self.importer = parsed_args.importer.lower()
         self.scale = parsed_args.scale
         self.tracking = parsed_args.tracking
@@ -159,13 +157,12 @@ class Arguments:
 
     def parse_config(self, config: str) -> None:
         """Parses a .pupt config file and sets parameters accordingly."""
-
-        with open(config, "r") as content:
+        with open(config) as content:
             print("Loading config preset: ", config)
             for line in content:
                 split = line.split("=")
                 parameter = split[0]
-                parameter = split[1].rstrip("\n").split("\"")
+                parameter = split[1].rstrip("\n").split('"')
 
                 if len(parameter) != 1:
                     parameter = parameter[1]
@@ -228,4 +225,4 @@ class Arguments:
                     print("use_gui: ", parameter)
                     self.use_gui = parameter
 
-            print("")
+            print()

@@ -1,3 +1,5 @@
+# ruff: noqa: T201
+
 """Argument parser for Eyeloop module."""
 
 import argparse
@@ -8,10 +10,10 @@ PROJECT_DIR = EYELOOP_DIR.parent
 
 
 class Arguments:
-    """Parses all command-line arguments and config.pupt parameters.
-    """
+    """Parses all command-line arguments and config.pupt parameters."""
 
-    def __init__(self, args) -> None:
+    def __init__(self, args: list[str]) -> None:
+        """Initialize and parse arguments."""
         self.config = None
         self.markers = None
         self.video = None
@@ -33,13 +35,15 @@ class Arguments:
         self.rotation = None
         self.fps = None
         self.use_gui: int
+        self.eng_profiling: str
+        self.proc_profiling: str
 
         self.parsed_args = self.parse_args(args)
         self.build_config(parsed_args=self.parsed_args)
 
     @staticmethod
-    def parse_args(args):
-        """Parses command-line arguments."""
+    def parse_args(args: list[str]) -> argparse.Namespace:
+        """Parse command-line arguments."""
         parser = argparse.ArgumentParser(description="Help list")
         parser.add_argument("-v", "--video", default="0", type=str,
                             help="Input a video sequence for offline processing.")
@@ -118,11 +122,15 @@ class Arguments:
                             "for inter-process communication.")
         parser.add_argument("-ug", "--use_gui", default="0", type=int,
                             help="Use graphical user interface (yes/no, 1/0; default = 0)")
+        parser.add_argument("-eng", "--eng_profiling", default="none", type=str,
+                            help="Set profiling output file (both, left, right, none = default).")
+        parser.add_argument("-proc", "--proc_profiling", default="none", type=str,
+                            help="Set profiling output file (both, left, right, none = default).")
 
         return parser.parse_args(args)
 
-    def build_config(self, parsed_args):
-        """Builds configuration from parsed arguments."""
+    def build_config(self, parsed_args: argparse.Namespace) -> None:
+        """Build configuration from parsed arguments."""
         self.config = parsed_args.config
 
         if self.config != "0":  # config file was set.
@@ -152,22 +160,19 @@ class Arguments:
         self.tracker_fps = parsed_args.tracker_fps
         self.sharedmem = parsed_args.sharedmem
         self.use_gui = parsed_args.use_gui
+        self.eng_profiling = parsed_args.eng_profiling
+        self.proc_profiling = parsed_args.proc_profiling
 
-        #self.blink = parsed_args.blink
-
-    def parse_config(self, config: str) -> None:
-        """Parses a .pupt config file and sets parameters accordingly."""
-        with open(config) as content:
+    def parse_config(self, config: str) -> None:  # noqa: C901, PLR0912, PLR0915
+        """Parse a .pupt config file and sets parameters accordingly."""
+        with open(config) as content:  # noqa: PTH123
             print("Loading config preset: ", config)
             for line in content:
                 split = line.split("=")
                 parameter = split[0]
                 parameter = split[1].rstrip("\n").split('"')
 
-                if len(parameter) != 1:
-                    parameter = parameter[1]
-                else:
-                    parameter = parameter[0]
+                parameter = parameter[1] if len(parameter) != 1 else parameter[0]
 
                 if parameter == "video":
                     print("Video preset: ", parameter)
@@ -224,5 +229,11 @@ class Arguments:
                 elif parameter == "use_gui":
                     print("use_gui: ", parameter)
                     self.use_gui = parameter
+                elif parameter == "eng_profiling":
+                    print("eng_profiling: ", parameter)
+                    self.eng_profiling = parameter
+                elif parameter == "proc_profiling":
+                    print("proc_profiling: ", parameter)
+                    self.proc_profiling = parameter
 
             print()

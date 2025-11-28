@@ -56,13 +56,22 @@ class Shape:
         self.last_min_radius = self.min_radius
         self.compute_threshold()
 
-        self.time_start: float | None = None
-        self.time_threshold: float | None = None
-        self.time_walkout: float | None = None
-        self.time_fit_model: float | None = None
-        self.time_dt_fit_start: float | None = None
-        self.time_dt_fit_end: float | None = None
-        self.time_radius_filter: float | None = None
+        self.time_threshold: float = 0
+        self.time_walkout_t: float = 0
+        self.time_fit_model: float = 0
+        self.time_walkout_f: float = 0
+        self.time_dt_fit: float = 0
+
+        self.timing_cycle: int = 0
+        self.print_cycle: int = 100
+        self.backup_fits: int = 0
+
+        print_status = config.arguments.proc_profiling
+
+        if print_status in {"Both", config.arguments.side}:
+            self.profile_enabled = True
+        else:
+            self.profile_enabled = False
 
 
     def _setup_pupil_params(self) -> None:
@@ -151,16 +160,18 @@ class Shape:
     def compute_threshold(self) -> None:
         """Compute the threshold for pupil detection based on min_radius."""
         self.threshold = len(crop_stock) * self.min_radius * 1.05
-        self.logger.info(
-            "Type: %s_%s; Min_radius: %s; Max_radius: %s; Threshold: %s",
-            config.arguments.side, self.track_type, self.min_radius,
-            self.max_radius, self.threshold,
-        )
+        # self.logger.info(
+        #     "Type: %s_%s; Min_radius: %s; Max_radius: %s; Threshold: %s",
+        #     config.arguments.side, self.track_type, self.min_radius,
+        #     self.max_radius, self.threshold,
+        # )
 
 
     def track(self, source: np.ndarray) -> None:
         """Tracks the eye feature in the given source image."""
-        self.time_start = time.perf_counter_ns() / 1e9
+        self.timing_cycle += 1
+
+        time_1 = time.perf_counter_ns() / 1e9
 
         if self.last_min_radius != self.min_radius:
             self.compute_threshold()
@@ -172,7 +183,8 @@ class Shape:
         # Performs a simple binarization and applies a smoothing gaussian kernel.
         self.apply_thresh() #either pupil or cr
 
-        self.time_threshold = time.perf_counter_ns() / 1e9
+        time_2 = time.perf_counter_ns() / 1e9
+        self.time_threshold += time_2 - time_1
 
         mean_img = np.mean(self.source)
 
@@ -193,16 +205,18 @@ class Shape:
                 config.engine.dataout[self.track_type] = ()
                 self.logger.info("Blink detected.")
                 return
+
         if self.track_type == "pupil":
-            self.pupil_fit()
+            self.pupil_fit(time_2)
         else:
-            self.time_dt_fit_start = time.perf_counter_ns() / 1e9
             center = self.distance_transform.detect(self.source)
-            self.time_dt_fit_end = time.perf_counter_ns() / 1e9
+            self.time_dt_fit += time.perf_counter_ns() / 1e9 - time_2
             if center is not None:
                 self.center = center
 
-        # self._log_timings()
+        if self.timing_cycle == self.print_cycle:
+            self._log_timings()
+            self.timing_cycle = 0
 
 
     def pupil_thresh_(self) -> None:
@@ -229,18 +243,24 @@ class Shape:
         )
 
 
-    def pupil_fit(self) -> None:
+    def pupil_fit(
+        self,
+        time_2: float | None = None,
+    ) -> None:
         """Fit the pupil model to the detected boundary points."""
         try:
             r = self.pupil_walkout()
-            self.time_walkout = time.perf_counter_ns() / 1e9
+
+            time_3 = time.perf_counter_ns() / 1e9
+            self.time_walkout_t += time_3 - time_2
+
             fit_params = self.fit_model.fit(r)
-            # self.logger.info("Pupil fit success.")
-            self.time_fit_model = time.perf_counter_ns() / 1e9
+
+            time_4 = time.perf_counter_ns() / 1e9
+            self.time_fit_model += time_4 - time_3
 
             self.center = fit_params[0]
 
-            # raw_r = (self.fit_model.params[1] + self.fit_model.params[2]) / 2.0
             try:
                 # frame_valid = self.radius_filter()
                 frame_valid = True
@@ -255,27 +275,18 @@ class Shape:
                 else:
                     # Snap: return empty output
                     config.engine.dataout[self.track_type] = ()
-            # self.logger.info("Pupil radius: %.2f", self.fit_model.params[1])
-            # if config.arguments.side == "Right":
-            #     self.logger.info("raw=%.3f filtered=%.3f", raw_r, self.fit_model.params[1])
-
 
         # If pupil_walkout or fit fails, fall back to distance transform
-        except IndexError:
-            # self.logger.info(f"Fit index error: {e}")
-            self.time_dt_fit_start = time.perf_counter_ns() / 1e9
-            center = self.distance_transform.detect(self.source)
-            self.time_dt_fit_end = time.perf_counter_ns() / 1e9
-            if center is not None:
-                self.center = center
-
         except Exception:  # noqa: BLE001
             # self.logger.info(f"Fit-func error: {e}")
-            self.time_dt_fit_start = time.perf_counter_ns() / 1e9
+            time_3 = time.perf_counter_ns() / 1e9
+            self.time_walkout_f += time_3 - time_2
             center = self.distance_transform.detect(self.source)
-            self.time_dt_fit_end = time.perf_counter_ns() / 1e9
+            self.backup_fits += 1
             if center is not None:
                 self.center = center
+            self.time_dt_fit += time.perf_counter_ns() / 1e9 - time_3
+
 
 
     def radius_filter(self) -> bool:
@@ -504,31 +515,42 @@ class Shape:
 
     def _log_timings(self) -> None:  # track_type: ignore[operator]
         """Log the timing information for each processing step."""
-        try:
-            if self.time_fit_model is not None:
-                self.logger.info(
-                    "%s; Threshold: %.3fms; Walkout=%.3fms, Fit=%.3fms, Total=%.3fms; FPS=%.2f",
-                    self.track_type,
-                    (self.time_threshold - self.time_start) * 1000,  # track_type: ignore
-                    (self.time_walkout - self.time_threshold) * 1000,  # track_type: ignore
-                    (self.time_fit_model - self.time_walkout) * 1000,  # track_type: ignore
-                    (self.time_fit_model - self.time_start) * 1000,  # track_type: ignore
-                    1 / (self.time_fit_model - self.time_start),  # track_type: ignore
-                )
-            elif self.time_dt_fit_end is not None:
-                self.logger.info(
-                    "%s; Threshold: %.3fms; dt=%.3fms; total=%.3fms; FPS=%.2f",
-                    self.track_type,
-                    (self.time_threshold - self.time_start) * 1000,  # track_type: ignore
-                    (self.time_dt_fit_end - self.time_dt_fit_start) * 1000,  # track_type: ignore
-                    (self.time_dt_fit_end - self.time_start) * 1000,  # track_type: ignore
-                    1 / (self.time_dt_fit_end - self.time_start),  # track_type: ignore
-                )
-            else:
-                self.logger.warning("Incomplete timing information.")
+        if self.profile_enabled:
+            try:
+                if self.track_type == "pupil":
+                    total_time = (self.time_threshold + self.time_walkout_t +
+                                self.time_fit_model + self.time_walkout_f +
+                                self.time_dt_fit) / self.print_cycle * 1000
 
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning("Timing log error: %s", e)
+                    if self.backup_fits == 0:
+                        self.backup_fits = 1
 
-        self.time_start = self.time_threshold = self.time_walkout = \
-            self.time_fit_model = self.time_dt_fit_start = self.time_dt_fit_end = None
+                    self.logger.info(
+                        "PUPIL:: TH: %.3fms; WA T: %.3fms; FM: %.3fms; WA F: %.3f; DT: %.3fms, T: %.3fms",
+                        (self.time_threshold / self.print_cycle) * 1000,
+                        (self.time_walkout_t / (self.print_cycle-self.backup_fits)) * 1000,
+                        (self.time_fit_model / (self.print_cycle-self.backup_fits)) * 1000,
+                        (self.time_walkout_f / self.backup_fits) * 1000,
+                        (self.time_dt_fit / self.backup_fits) * 1000,
+                        total_time,
+                    )
+                elif self.track_type == "cr":
+                    self.logger.info(
+                        "CR:: TH: %.3fms; DT: %.3fms; T: %.3fms",
+                        (self.time_threshold / self.print_cycle) * 1000,
+                        (self.time_dt_fit / self.print_cycle) * 1000,
+                        (self.time_threshold + self.time_dt_fit) / self.print_cycle * 1000,
+                    )
+                else:
+                    self.logger.error("Unknown track_type for timing log: %s", self.track_type)
+            except Exception as e:  # noqa: BLE001
+                except_msg = f"Error logging timings: {e}"
+                raise ValueError(except_msg)  # noqa: B904
+
+        self.time_threshold = 0.0
+        self.time_walkout_t = 0.0
+        self.time_fit_model = 0.0
+        self.time_walkout_f = 0.0
+        self.time_dt_fit = 0.0
+        self.backup_fits = 0
+

@@ -25,6 +25,13 @@ class Engine:
         self.extractor = extractor
         self.live = True  # Access this to check if Core is running.
 
+        print_status = config.arguments.eng_profiling
+
+        if print_status in {"Both", config.arguments.side}:
+            self.profile_enabled = True
+        else:
+            self.profile_enabled = False
+
         self.process_blink = False
         self.brightness_threshold = 3
 
@@ -143,16 +150,17 @@ class Engine:
 
     def _log_timings(self) -> None:
         """Log timing information for the tracking process."""
-        self.logger.info(
-            "PU: %.3fms; CR: %.3fms; EX: %.3fms; T: %.1fms; E-FPS: %f; IM: %.3f; T-FPS: %f",
-            (self.time_start_mid / self.print_cycle) * 1000,
-            (self.time_mid_end / self.print_cycle) * 1000,
-            (self.time_end_gui_fetch / self.print_cycle) * 1000,
-            (self.time_total / self.print_cycle) * 1000,
-            self.print_cycle / (self.time_total),
-            (self.time_import / self.print_cycle) * 1000,
-            self.print_cycle / (self.time_total + self.time_import),
-        )
+        if self.profile_enabled:
+            self.logger.info(
+                "PU: %.3fms; CR: %.3fms; EX: %.3fms; T: %.1fms; E-FPS: %f; IM: %.3f; T-FPS: %f",
+                (self.time_start_mid / self.print_cycle) * 1000,
+                (self.time_mid_end / self.print_cycle) * 1000,
+                (self.time_end_gui_fetch / self.print_cycle) * 1000,
+                (self.time_total / self.print_cycle) * 1000,
+                self.print_cycle / (self.time_total),
+                (self.time_import / self.print_cycle) * 1000,
+                self.print_cycle / (self.time_total + self.time_import),
+            )
         self.time_import = 0.0
         self.time_start_mid = 0.0
         self.time_mid_end = 0.0

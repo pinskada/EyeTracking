@@ -67,7 +67,7 @@ class Importer:
 
         # self.logger.info("<%s> First frame received, proceeding to arm engine.", self.side)
         self._first_frame()
-        self.logger.info("<%s> Starting routing.", self.side)
+        # self.logger.info("<%s> Starting routing.", self.side)
         self._proceed()
 
 
@@ -233,7 +233,7 @@ class Importer:
         self.frame_dtype = np.dtype(msg["frame_dtype"])
         self.shm = SharedMemory(name=self.shared_memory_name)
         self.tracker_shm_is_closed_s.clear()
-        self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
+        # self.logger.info("<%s> tracker_shm_is_closed_s is cleared.", self.side)
 
 
     def _close_shm(self) -> None:

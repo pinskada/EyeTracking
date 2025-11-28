@@ -28,7 +28,7 @@ class SimpleCRSelector:
     def __init__(  # noqa: PLR0913
         self,
         expected_count: int,
-        cluster_radius: float = 25.0,
+        cluster_radius: float = 80.0,
         sep_min_x: float = 5.0,
         sep_min_y: float = 5.0,
         temporal_alpha: float = 0.5,
@@ -73,7 +73,7 @@ class SimpleCRSelector:
     def create_pattern(
         self,
         candidates: list[tuple[tuple[float, float], float, float, float]],
-    ) -> list[tuple[tuple[float, float], float]]:
+    ) -> list[tuple[tuple[float, float], float, bool]]:
         """Select CRs from a list of DT candidates.
 
         The selection process has three steps:
@@ -117,7 +117,7 @@ class SimpleCRSelector:
         if not candidates:
             self.prev_centers = None
             return []
-
+        self.logger.info(f"Received {len(candidates)} candidates for pattern selection.")
         if self.eye_side == "right":
             # Flip x-coordinates for right eye to simplify pattern logic.
             candidates = [(( -c[0][0], c[0][1]), c[1], c[2], c[3]) for c in candidates]
@@ -131,6 +131,7 @@ class SimpleCRSelector:
             centers, radii,
         )
 
+        self.logger.info(f"Clustered to {num_candidates} candidates.")
         return self._pack_cr_list(cluster_centers, cluster_radii)
 
         # (filtered_centers, filterd_radii, filtered_num_candidates) = self._check_consistency(

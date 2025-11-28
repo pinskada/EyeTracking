@@ -203,16 +203,41 @@ class Importer:
 
             elif msg.get("param") == "min_radius_pupil":
                 config.engine.pupil_processor.min_radius = msg.get("value")
+                config.engine.pupil_processor.distance_transform.min_radius = msg.get("value")
                 # self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
             elif msg.get("param") == "min_radius_cr":
                 config.engine.cr_processor.min_radius = msg.get("value")
+                config.engine.cr_processor.distance_transform.min_radius = msg.get("value")
                 # self.logger.info("<%s> minR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "max_radius_pupil":
                 config.engine.pupil_processor.max_radius = msg.get("value")
+                config.engine.pupil_processor.distance_transform.max_radius = msg.get("value")
                 # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
             elif msg.get("param") == "max_radius_cr":
                 config.engine.cr_processor.max_radius = msg.get("value")
+                config.engine.cr_processor.distance_transform.max_radius = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+
+            elif msg.get("param") == "min_circularity_pupil":
+                config.engine.pupil_processor.distance_transform.circularity_min = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+            elif msg.get("param") == "max_circularity_pupil":
+                config.engine.pupil_processor.distance_transform.circularity_max = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+
+            elif msg.get("param") == "min_circularity_cr":
+                config.engine.cr_processor.distance_transform.circularity_min = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+            elif msg.get("param") == "max_circularity_cr":
+                config.engine.cr_processor.distance_transform.circularity_max = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+
+            elif msg.get("param") == "max_aspect_ratio_pupil":
+                config.engine.pupil_processor.distance_transform.aspect_ratio_max = msg.get("value")
+                # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
+            elif msg.get("param") == "max_aspect_ratio_cr":
+                config.engine.cr_processor.distance_transform.aspect_ratio_max = msg.get("value")
                 # self.logger.info("<%s> maxR set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "preview":

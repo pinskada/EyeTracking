@@ -136,9 +136,9 @@ class Shape:
         self.max_radius = 5 # Maximum expected radius for CR detection
 
         # Distance transform settings -------------------------------------
-        self.circularity_min = 1 # Minimum circularity for pupil detection
-        self.circularity_max = 2 # Maximum circularity for pupil detection
-        self.aspect_ratio_max = 2 # Minimum aspect ratio for pupil detection
+        self.circularity_min = 0.0 # Minimum circularity for pupil detection
+        self.circularity_max = 1000 # Maximum circularity for pupil detection
+        self.aspect_ratio_max = 1000 # Minimum aspect ratio for pupil detection
 
         self.w_r = 0.4   # Score weight for radius
         self.w_c = 0.4   # Score weight for circularity

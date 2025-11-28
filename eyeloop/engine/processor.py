@@ -154,6 +154,7 @@ class Shape:
             self.circularity_max,
             self.aspect_ratio_max,
             weights=(self.w_r, self.w_c, self.w_d),
+            number_of_points=self.number_of_cr,
         )
 
 
@@ -524,6 +525,13 @@ class Shape:
 
                     if self.backup_fits == 0:
                         self.backup_fits = 1
+
+                    if self.print_cycle - self.backup_fits == 0:
+                        self.backup_fits = -1000000000
+
+                    if self.print_cycle == 0:
+                        self.logger.error("Print cycle is zero during timing log.")
+                        return
 
                     self.logger.info(
                         "PUPIL:: TH: %.3fms; WA T: %.3fms; FM: %.3fms; WA F: %.3f; DT: %.3fms, T: %.3fms",

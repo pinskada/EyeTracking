@@ -25,6 +25,7 @@ class GUI:
         self.cr_bin = self.side + "_binary_cr"
 
         self.print_cycle = 0
+        self.print_fps = 5
 
 
     def release(self) -> None:
@@ -39,10 +40,10 @@ class GUI:
         self.bin_stock = np.zeros((height, width))
         self.bin_P = self.bin_stock.copy()
 
-        scale = 1
+        scale = 0.5
 
-        width = width // scale
-        height = height // scale
+        width = int(np.floor(width * scale))
+        height = int(np.floor(height * scale))
 
         if (self.side == "Right"):
             x_shift = width
@@ -116,7 +117,7 @@ class GUI:
     def update(self, img: np.ndarray) -> None:
         """Update the GUI with the latest image and data."""
         self.print_cycle += 1
-        if self.print_cycle % 5 == 0:
+        if self.print_cycle == self.print_fps:
             source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             self.pupil(source_rgb)
 

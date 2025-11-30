@@ -6,9 +6,10 @@ import time
 import cv2
 import numpy as np
 from eyeloop import config
-
-from vr_core.utilities.logger_setup import setup_logger
 from eyeloop.engine.models.cr_pattern_tracker import SimpleCRSelector
+
+from vr_core.eye_tracker import tracker_types as tt
+from vr_core.utilities.logger_setup import setup_logger
 
 
 class DistanceTransform:
@@ -111,31 +112,12 @@ class DistanceTransform:
                 # nothing passed all checks
                 self.time_center_adj_dt = time.perf_counter_ns() / 1e9
                 config.engine.dataout[self.track_type] = ()
-                return ()
-
-            candidates = self.cr_pattern_tracker.create_pattern(candidates)
-
-            # sort by score (lower is better)
-            # candidates.sort(key=lambda c: c[3])
-
-            # keep up to max_blobs best blobs
-            # top_n = min(max_blobs, len(candidates))
-            for i in range(len(candidates)):
-                (cx, cy), r_est, is_filled = candidates[i]  # noqa: RUF059
-                # Convert from cropped coordinates to full-image coordinates
-                self.dt_blobs.append(
-                    ((float(cx + offset_x), float(cy)), float(r_est))
-                )
-                # if self.track_type == "pupil":
-                #     self.logger.info("Radius: %f, Circularity: %f", r_est, circularity)
+                return None
 
             if self.track_type == "cr":
-                config.engine.dataout[self.track_type] = self.dt_blobs
-                # self.logger.info("Found %d CRs out of %d candidates.", len(self.dt_blobs), num_labels - 1)
+                self._process_crs(candidates, offset_x)
             elif self.track_type == "pupil":
-                # self.logger.info("center_adj_dt fit success with center: %s.", self.dt_blobs[0])
-                best_center, _ = self.dt_blobs[0]
-                self.center = best_center
+                self._process_pupil(candidates)
             else:
                 self.logger.error(
                     "Unknown track_type in center_adj_dt: %s", self.track_type
@@ -151,19 +133,20 @@ class DistanceTransform:
             self.logger.warning("DT center_adj failed with error: %s", e)
             return None
 
+
     def _filter_blobs(
         self,
         num_labels: int,
         labels: np.ndarray,
         stats: np.ndarray,
         prev_center: tuple[float, float] | None,
-    ) -> list[tuple[tuple[int, int], float, float, float]]:
+    ) -> list[tt.DTCandidate]:
         """Filter connected components to find plausible blobs.
 
         Returns a list of (center, r_est, circularity, score).
         """
         candidates: list[
-            tuple[tuple[int, int], float, float, float]
+            tt.DTCandidate
         ] = []  # (center, r_est, circularity, score)
 
         # shorthand for OpenCV stat indices
@@ -276,6 +259,35 @@ class DistanceTransform:
 
             score = self.w_r * radius_term + self.w_c * circ_term + self.w_d * dist_term
 
-            candidates.append(((cx, cy), r_est, circularity, score))
+            candidates.append(tt.DTCandidate((cx, cy), r_est, area, circularity, score))
 
         return candidates
+
+
+    def _process_pupil(
+        self,
+        candidates: list[tt.DTCandidate],
+    ) -> None:
+        """Process pupil candidates to select the best one."""
+        candidates.sort(key=lambda c: c.score)
+        pupil = candidates[0]
+
+        self.center = pupil.center
+
+
+    def _process_crs(
+        self,
+        candidates: list[tt.DTCandidate],
+        offset_x: int,
+    ) -> None:
+        """Process CR candidates to select the best ones."""
+        filtered_candidates = self.cr_pattern_tracker.create_pattern(candidates, offset_x)
+        config.engine.dataout[self.track_type] = filtered_candidates
+
+        # for i in range(len(candidates)):
+        #     (cx, cy), r_est, is_filled = candidates[i]  # noqa: RUF059
+        #     # Convert from cropped coordinates to full-image coordinates
+        #     self.dt_blobs.append(
+        #         ((float(cx + offset_x), float(cy)), float(r_est))
+        #     )
+        # config.engine.dataout[self.track_type] = self.dt_blobs

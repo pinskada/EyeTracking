@@ -1,9 +1,9 @@
 """Queue extractor module for sending processed data via queues."""
 
-import numpy as np
-import cv2
-
 import eyeloop.config as config
+import numpy as np
+
+import vr_core.eye_tracker.tracker_types as tt
 from vr_core.utilities.logger_setup import setup_logger
 
 
@@ -30,12 +30,19 @@ class QueueExtractor:
             self.eye_ready_signal.set()
             #self.logger.info("eye_ready_s set.")
 
+            pupil_data = core.dataout["pupil_data"]
+            cr_data = core.dataout["cr_data"]
+
+            tracker_data = tt.OneSideTrackerData(
+                pupil=pupil_data,
+                crs=cr_data,
+            )
 
             # Create message with tracking data
             tracking_data_message = {
                 "type": "eye_data",
                 "frame_id": config.current_frame_id,
-                "data": core.dataout
+                "data": tracker_data
             }
 
             # Send tracking data message via response queue

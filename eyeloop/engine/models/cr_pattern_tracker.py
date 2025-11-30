@@ -5,6 +5,7 @@
 import numpy as np
 from eyeloop import config
 
+import vr_core.eye_tracker.tracker_types as tt
 from vr_core.utilities.logger_setup import setup_logger
 
 
@@ -72,8 +73,9 @@ class SimpleCRSelector:
     # ------------------------------------------------------------------
     def create_pattern(
         self,
-        candidates: list[tuple[tuple[float, float], float, float, float]],
-    ) -> list[tuple[tuple[float, float], float, bool]]:
+        candidates: list[tt.DTCandidate],
+        offset_x: int = 0,
+    ) -> list[tt.CrData]:
         """Select CRs from a list of DT candidates.
 
         The selection process has three steps:
@@ -107,6 +109,8 @@ class SimpleCRSelector:
 
                 Only (cx, cy) and radius are used. You can still compute
                 'score' upstream however you like (DT quality etc.).
+            offset_x:
+                Horizontal offset to add to the x-coordinates of the candidates.
 
         Returns:
             selected_crs:
@@ -132,7 +136,7 @@ class SimpleCRSelector:
         )
 
         self.logger.info(f"Clustered to {num_candidates} candidates.")
-        return self._pack_cr_list(cluster_centers, cluster_radii)
+        return self._pack_cr_list(cluster_centers, cluster_radii, offset_x)
 
         # (filtered_centers, filterd_radii, filtered_num_candidates) = self._check_consistency(
         #     cluster_centers, cluster_radii, num_candidates,
@@ -257,7 +261,7 @@ class SimpleCRSelector:
         cluster_centers: np.ndarray[float],
         cluster_radii: np.ndarray[float],
         num_candidates: int,
-    ) -> list[tuple[float, float], float, bool]:
+    ) -> list[tuple[tuple[float, float], float, bool]]:
         """Fill missing CRs based on the expected pattern.
 
         Based on the expected pattern of CRs and maybe temporal information, we can estimate positions
@@ -280,7 +284,7 @@ class SimpleCRSelector:
 
         """
         # Placeholder implementation: return empty list.
-        return []
+        return [((0.0, 0.0), 0.0, True)]  # Placeholder implementation.
 
 
     def _pack_cr_list(
@@ -288,7 +292,8 @@ class SimpleCRSelector:
         centers: np.ndarray,
         radii: np.ndarray,
         is_filled: np.ndarray | None = None,
-    ) -> list[tuple[tuple[float, float], float, bool]]:
+        offset_x: int = 0,
+    ) -> list[tt.CrData]:
         """Convert internal array representation back to a list of CR tuples.
 
         This is useful for testing intermediate steps: you can run one
@@ -347,8 +352,15 @@ class SimpleCRSelector:
             out_centers[:, 0] *= -1.0
 
         # Build output list
-        cr_list: list[tuple[tuple[float, float], float, bool]] = []
+        cr_list: list[tt.CrData] = []
         for (cx, cy), r, f in zip(out_centers, radii, filled, strict=True):
-            cr_list.append(((float(cx), float(cy)), float(r), bool(f)))
+            cr_data = tt.CrData(
+                center=(float(cx + offset_x), float(cy)),
+                radius=float(r),
+                is_filled=bool(f)
+            )
+
+            cr_list.append(cr_data)
+
 
         return cr_list

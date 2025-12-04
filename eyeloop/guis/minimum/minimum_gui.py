@@ -40,7 +40,7 @@ class GUI:
         self.bin_stock = np.zeros((height, width))
         self.bin_P = self.bin_stock.copy()
 
-        scale = 0.5
+        scale = 0.8
 
         width = int(np.floor(width * scale))
         height = int(np.floor(height * scale))
@@ -55,6 +55,8 @@ class GUI:
         cv2.namedWindow(self.preview, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.pupil_bin, cv2.WINDOW_NORMAL)
 
+
+        self.logger.info("%s eye; width: %s; height: %s", self.side, width, height)
         cv2.resizeWindow(self.preview, width, height)
         cv2.resizeWindow(self.pupil_bin, width, height)
 
@@ -93,23 +95,22 @@ class GUI:
         """Draw pupil and CR marks on the source image."""
         if config.engine.dataout["pupil"]:
             try:
-                ((pupil_center_x, pupil_center_y), pupil_radius) = config.engine.dataout["pupil"]
+                pp = config.engine.dataout["pupil"]
                 cv2.ellipse(
                     source_rgb,
-                    tuple_int((pupil_center_x, pupil_center_y)),
-                    tuple_int((pupil_radius, pupil_radius)),
+                    tuple_int(pp.center),
+                    tuple_int((pp.radius, pp.radius)),
                     0, 0, 360, red, 1, # noqa: F405
                 )
-                self.place_cross(source_rgb, (pupil_center_x, pupil_center_y), red, 1, 20)  # noqa: F405
-
+                self.place_cross(source_rgb, pp.center, red, 1, 20)  # noqa: F405
             except Exception as e:
                 self.logger.error("Pupil mark error: %s", e)
 
         if config.engine.dataout["cr"]:
             try:
                 cr_list = config.engine.dataout["cr"]
-                for cr_center in cr_list:
-                    self.place_cross(source_rgb, cr_center[0], green, 2, 12)  # noqa: F405
+                for cr in cr_list:
+                    self.place_cross(source_rgb, cr.center, green, 2, 12)  # noqa: F405
             except Exception as e:
                 self.logger.error("CR mark error: %s", e)
 

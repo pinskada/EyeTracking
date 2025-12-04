@@ -12,6 +12,7 @@ from eyeloop.constants.processor_constants import *
 from eyeloop.engine.models.circular import Circle
 from eyeloop.engine.models.distance_transform import DistanceTransform
 from eyeloop.engine.models.ellipsoid import Ellipse, Fast_Elliptical_Stable
+from vr_core.eye_tracker import tracker_types as tt
 
 from vr_core.utilities.logger_setup import setup_logger
 
@@ -125,7 +126,7 @@ class Shape:
 
     def _setup_cr_params(self) -> None:
         """Set up corneal reflection processor parameters."""
-        self.number_of_cr = 4 # Set how many CRs to track
+        self.number_of_cr = 6 # Set how many CRs to track
 
         # Threshold settings ----------------------------------------------
         self.binarythreshold = 200 # Binary threshold
@@ -272,7 +273,10 @@ class Shape:
             if self.track_type is not None and self.fit_model.params is not None:
                 if frame_valid:
                     # Normal tracking output
-                    config.engine.dataout[self.track_type] = fit_params
+                    config.engine.dataout[self.track_type] = tt.PupilData(
+                        center=fit_params[0],
+                        radius=fit_params[1],
+                    )
                 else:
                     # Snap: return empty output
                     config.engine.dataout[self.track_type] = ()

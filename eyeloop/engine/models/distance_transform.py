@@ -107,7 +107,6 @@ class DistanceTransform:
                 stats,
                 prev_center,
             )
-
             if not candidates:
                 # nothing passed all checks
                 self.time_center_adj_dt = time.perf_counter_ns() / 1e9
@@ -115,7 +114,7 @@ class DistanceTransform:
                 return None
 
             if self.track_type == "cr":
-                self._process_crs(candidates, offset_x)
+                self._process_crs(candidates, offset_x, max_blobs)
             elif self.track_type == "pupil":
                 self._process_pupil(candidates)
             else:
@@ -130,7 +129,7 @@ class DistanceTransform:
             return self.center  # noqa: TRY300
 
         except Exception as e:  # noqa: BLE001
-            self.logger.warning("DT center_adj failed with error: %s", e)
+            self.logger.warning("DT center_adj failed with error for %s: %s", self.track_type, e)
             return None
 
 
@@ -279,15 +278,25 @@ class DistanceTransform:
         self,
         candidates: list[tt.DTCandidate],
         offset_x: int,
+        max_blobs: int,
     ) -> None:
         """Process CR candidates to select the best ones."""
-        filtered_candidates = self.cr_pattern_tracker.create_pattern(candidates, offset_x)
-        config.engine.dataout[self.track_type] = filtered_candidates
+        # filtered_candidates = self.cr_pattern_tracker.create_pattern(candidates, offset_x)
+        # config.engine.dataout[self.track_type] = filtered_candidates
 
-        # for i in range(len(candidates)):
-        #     (cx, cy), r_est, is_filled = candidates[i]  # noqa: RUF059
-        #     # Convert from cropped coordinates to full-image coordinates
-        #     self.dt_blobs.append(
-        #         ((float(cx + offset_x), float(cy)), float(r_est))
-        #     )
-        # config.engine.dataout[self.track_type] = self.dt_blobs
+        candidates.sort(key=lambda c: c.score)
+        candidates = candidates[:max_blobs]
+        try:
+            for i in range(len(candidates)):
+                center = candidates[i].center
+                radius = candidates[i].radius_estimate
+
+                center = (center[0] + offset_x, center[1])
+
+                # Convert from cropped coordinates to full-image coordinates
+                self.dt_blobs.append(
+                    tt.CrData(center, radius, False)
+                )
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning("CR processing failed with error: %s", e)
+        config.engine.dataout[self.track_type] = self.dt_blobs

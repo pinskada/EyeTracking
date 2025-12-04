@@ -30,8 +30,8 @@ class QueueExtractor:
             self.eye_ready_signal.set()
             #self.logger.info("eye_ready_s set.")
 
-            pupil_data = core.dataout["pupil_data"]
-            cr_data = core.dataout["cr_data"]
+            pupil_data = core.dataout["pupil"]
+            cr_data = core.dataout["cr"]
 
             tracker_data = tt.OneSideTrackerData(
                 pupil=pupil_data,

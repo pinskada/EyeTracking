@@ -1,372 +1,440 @@
-# ruff: noqa: ERA001, ARG002
+"""CR pattern tracker."""
 
-"""Simple CR selector based on spatial clustering and basic heuristics."""
+from __future__ import annotations
 
-import numpy as np
-from eyeloop import config
+import math
+from dataclasses import dataclass
 
 import vr_core.eye_tracker.tracker_types as tt
 from vr_core.utilities.logger_setup import setup_logger
 
 
-class SimpleCRSelector:
-    """Very simple CR selector on top of DT candidates.
+@dataclass
+class _CrSlot:
+    """Internal representation of one CR in the pattern (in flipped coords).
 
-    Idea:
-      * We assume that TRUE CRs form a spatial cluster and that after
-        your radius/circularity filtering, at most ~half of the candidates
-        are false positives (eyelid reflections etc.).
-      * We find the densest cluster of candidates within 'cluster_radius'
-        and throw away outsiders.
-      * Inside that cluster we prefer points that:
-          - have many neighbours in the cluster (they're in the middle of it),
-          - have reasonable spatial separation from others (Δx/Δy > sep_min_*),
-          - optionally are close to previous-frame CR positions.
+    All geometry is stored in a coordinate system where the *pattern side*
+    is the same for both eyes. For the left eye, x is flipped so that
+    the CRs always appear on the same side of the pupil in this internal
+    space.
 
-    This class is intentionally simple and easy to debug; no fancy math.
+    Attributes:
+        center_flipped:
+            (x, y) center of the CR in the flipped coordinate space.
+        angle:
+            Angle of the CR relative to the pupil center, in radians,
+            in the flipped coordinate space. Normalized to [0, 2π).
+        radius:
+            Distance of the CR from the pupil center, in pixels.
+        missing_count:
+            How many consecutive frames this slot has been estimated
+            (i.e. no direct detection). Can be used later to discard
+            very stale estimates.
+
     """
 
-    def __init__(  # noqa: PLR0913
+    center_flipped: tuple[float, float]
+    angle: float
+    radius: float
+    missing_count: int = 0
+
+
+class CrPatternTracker:
+    """Cr pattern tracker class.
+
+    - Maintains an angularly ordered buffer of CR positions.
+    - Matches new DTCandidate detections to buffer slots by angle
+      (and loosely by radius).
+    - For slots with no detection in a frame, estimates a likely
+      position based on the average motion of the detected CRs.
+    - Returns a list of CrData where estimated CRs are marked
+      with ``is_filled = True``.
+    """
+
+    def __init__(
         self,
-        expected_count: int,
-        cluster_radius: float = 120.0,
-        sep_min_x: float = 5.0,
-        sep_min_y: float = 5.0,
-        temporal_alpha: float = 0.5,
-        temporal_max_dist: float = 20.0,
+        side: str,
+        num_crs: int = 6,
     ) -> None:
-        """Initialize the CR selector.
+        """Initialize the CR pattern tracker.
 
         Args:
-            expected_count:
-                Expected number of CRs to select.
-            cluster_radius:
-                Radius for spatial clustering of candidates.
-            sep_min_x:
-                Minimum horizontal separation between selected CRs.
-            sep_min_y:
-                Minimum vertical separation between selected CRs.
-            weights:
-                Weights for scoring: (neighbor_count, separation, temporal).
-            temporal_alpha:
-                Alpha for temporal filtering of previous centers.
-            temporal_max_dist:
-                Maximum distance to previous center to consider it valid.
+            side: Eye side identifier.
+            num_crs: Number of corneal reflections to track.
 
         """
-        self.expected_count = int(expected_count)
-        self.cluster_radius = float(cluster_radius)
-        self.sep_min_x = float(sep_min_x)
-        self.sep_min_y = float(sep_min_y)
-        self.temporal_alpha = float(temporal_alpha)
-        self.temporal_max_dist = float(temporal_max_dist)
-        self.array_width = 2
-        # Previous-frame CR centers for simple temporal filtering.
-        # List of (x, y) or None if no previous data.
-        self.prev_centers: np.ndarray | None = None
+        if side not in ("left", "right"):
+            self.logger.error("CrPatternTracker side should be 'left' or 'right', got %s", side)
 
-        self.eye_side = config.arguments.side
-        self.logger = setup_logger(f"{self.eye_side} cr_pattern")
+        self.logger = setup_logger(f"CrPatternTracker_{side}")
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-    def create_pattern(
+        self.side = side
+        self.num_crs = num_crs
+
+        # Internal buffer: angularly ordered slots describing the CR pattern.
+        self._slots: list[_CrSlot] = []
+        self._initialized: bool = False
+
+        # Store last pupil center in flipped coordinates so we can
+        # recompute CR centers from angle + radius.
+        self._last_pupil_center_flipped: tuple[float, float] | None = None
+
+        # Image width from the last frame (needed for flipping).
+        self._last_width: int | None = None
+
+        # Simple matching / estimation parameters.
+        # These are intentionally conservative and can be tuned later.
+        self.angle_threshold_rad: float = math.radians(25.0)
+        self.radius_rel_threshold: float = 0.5  # 50 % change allowed
+        self.min_detections_for_update: int = max(2, num_crs // 2)
+        self.max_missing_frames: int = 5  # currently not enforced aggressively
+
+
+    # ##################### Public API #####################
+
+    def update_candidates(
         self,
         candidates: list[tt.DTCandidate],
-        offset_x: int = 0,
+        pupil_center: tuple[float, float],
+        shape: tuple[int, int],
     ) -> list[tt.CrData]:
-        """Select CRs from a list of DT candidates.
-
-        The selection process has three steps:
-        1. If the side is right eye, flip x-coordinates of candidates.
-        2. Finds the densest cluster of candidates and filters outliers.
-        3. Ranks candidates inside the cluster using simple consistency scores.
-        4. Returns top N candidates according to the scores.
-
-        The rough pattern of the CRs is a half circle around the pupil in the center,
-        with new CRs apprering around the pupil as more IR sources are added.
-        The pupil centre nor radii is known to this module, so only relative positions
-        of the CRs are used. The pattern will be simplified to only left eye as
-        the right eye candidates will be flipped.
-
-              Left eye         Right eye
-
-                *         |         *
-              *           |           *
-                          |
-                          |
-              *           |           *
-                *         |         *
-
-        The general knowledge that the CRs form this pattern is
-        implicitly used in the clustering and scoring.
+        """Update CR candidates based on proximity to pupil center.
 
         Args:
             candidates:
-                List of tuples:
-                    ((cx, cy), radius, circularity, score)
-
-                Only (cx, cy) and radius are used. You can still compute
-                'score' upstream however you like (DT quality etc.).
-            offset_x:
-                Horizontal offset to add to the x-coordinates of the candidates.
+                List of detected CR candidates.
+            pupil_center:
+                Tuple of (x, y) coordinates of the pupil center.
+            shape:
+                Size of the eye image (width, height).
 
         Returns:
-            selected_crs:
-                List of:
-                    ((cx, cy), radius, is_filled)
+            List of filtered CR data.
 
         """
+        # 1. Flip x coordinates of left eye pupil and crs to make the algorithm eye side consistent
+        # 2. Assume pupil center as a rough center of the circle formed by the CRs (the pupil center relative to
+        #    the crs positions will change slightly between frames) -> compute their angles and distances
+        # 3. If first run, save num_crs of crs to a buffer in angle increasing order, or wait several frames
+        #    to fill num_crs candidates
+        # 4. For each new frame, compute angles and distances of candidates to pupil center
+        # 5. Match new candidates to crs in the buffer based on angle relative angle
+        # 6. Update buffer with new cr positions
+        # 7. If a cr is not present in the new candidates, estimate its new position based on previous position
+        #    and average movement of other crs
+        # 8. Flip back x coordinates of left eye cr before returning
+        # 9. Return updated a list[tt.CrData] of crs
+
+        # If only half or less (0-3/6) of the required CRs are detected, return empty list
+
+        _, width = shape  # height unused, but keeps signature explicit
+        self._last_width = width
+
         if not candidates:
-            self.prev_centers = None
-            return []
-        self.logger.info(f"Received {len(candidates)} candidates for pattern selection.")
-        if self.eye_side == "right":
-            # Flip x-coordinates for right eye to simplify pattern logic.
-            # candidates = [(( -c.center[0], c.center[1]), c.area, c.circularity, c.score) for c in candidates]
-            for c in candidates:
-                c.center = ( -c.center[0], c.center[1])
+            # No detections at all this frame.
+            if not self._initialized or not self._slots:
+                # Nothing to estimate from yet - fall back to empty list.
+                return []
+            # Reuse previous pattern, recomputed around current pupil center,
+            # and mark all as filled.
+            self._last_pupil_center_flipped = self._flip_point(pupil_center, width)
+            estimated_indices = list(range(len(self._slots)))
+            self._recompute_slot_centers()
+            return self._build_output(estimated_indices)
 
-        # Convert centers and radii to arrays for easier math.
-        centers = np.array([c.center for c in candidates], dtype=np.float32)  # (M, 2)
-        radii = np.array([c.radius_estimate for c in candidates], dtype=np.float32)    # (M, 1)
+        # Convert candidates into polar coordinates (angle & radius)
+        # in flipped space, relative to the pupil center.
+        polar_candidates, pupil_center_flipped = self._compute_angles_distances(
+            candidates,
+            pupil_center,
+            width,
+        )
+        self._last_pupil_center_flipped = pupil_center_flipped
 
-        try:
-            # Find densest cluster of candidates.
-            (cluster_centers, cluster_radii, num_candidates) = self._cluster_candidates(  # noqa: RUF059
-                centers, radii,
+        # If we are not initialized yet, try to initialize the pattern.
+        if not self._initialized:
+            self._try_initialize_slots(polar_candidates)
+            if not self._initialized:
+                # Not enough information yet - just pass through raw detections.
+                return self._create_cr_data_list(candidates)
+
+        # Match polar candidates to existing slots.
+        (
+            matched_indices,
+            angle_deltas,
+            radius_deltas,
+        ) = self._match_candidates_to_buffer(polar_candidates)
+
+        num_matches = len(matched_indices)
+        if num_matches < self.min_detections_for_update:
+            # Too few reliable detections to estimate a meaningful motion.
+            # We still return the buffered pattern, but mark everything as filled.
+            self._recompute_slot_centers()
+            estimated_indices = list(range(len(self._slots)))
+            return self._build_output(estimated_indices)
+
+        # Estimate positions for slots without a match in this frame.
+        estimated_indices = self._estimate_missing_crs(
+            matched_indices,
+            angle_deltas,
+            radius_deltas,
+        )
+
+        # Build final CrData list; estimated ones are flagged.
+        return self._build_output(estimated_indices)
+
+
+    # ##################### Internal helpers #####################
+
+    def _flip_x_coord(self, x: float, width: int) -> float:
+        """Flip x-coordinate for the left eye so that pattern side matches.
+
+        Right eye: x is returned unchanged.
+        Left eye:  x is mirrored around the vertical center line.
+        """
+        if self.side == "left":
+            return float(width - 1 - x)
+        return float(x)
+
+
+    def _flip_point(self, pt: tuple[float, float], width: int) -> tuple[float, float]:
+        """Flip a 2D point in x if needed for the left eye."""
+        x, y = pt
+        return self._flip_x_coord(x, width), float(y)
+
+
+    def _compute_angles_distances(
+        self,
+        candidates: list[tt.DTCandidate],
+        pupil_center: tuple[float, float],
+        width: int,
+    ) -> tuple[list[dict], tuple[float, float]]:
+        """Compute angle and radius of each candidate in flipped space.
+
+        Returns
+        -------
+        polar_candidates:
+            List of dicts with keys:
+            - "candidate": original DTCandidate
+            - "center_flipped": (x, y) center in flipped coords
+            - "angle": angle in radians in [0, 2π)
+            - "radius": radial distance from pupil center
+        pupil_center_flipped:
+            Pupil center in flipped coordinates.
+
+        """
+        px, py = pupil_center
+        px_f = self._flip_x_coord(px, width)
+        pupil_center_flipped = (px_f, float(py))
+
+        polar_candidates: list[dict] = []
+        for cand in candidates:
+            cx, cy = cand.center
+            cx_f = self._flip_x_coord(cx, width)
+            dx = cx_f - px_f
+            dy = cy - py
+
+            angle = math.atan2(dy, dx)
+            if angle < 0.0:
+                angle += 2.0 * math.pi
+            radius = math.hypot(dx, dy)
+
+            polar_candidates.append(
+                {
+                    "candidate": cand,
+                    "center_flipped": (cx_f, float(cy)),
+                    "angle": angle,
+                    "radius": radius,
+                },
             )
-        except Exception as e:
-            self.logger.error("CR clustering error: %s", e)
-            return []
 
-        self.logger.info(f"Clustered to {num_candidates} candidates.")
-        return self._pack_cr_list(cluster_centers, cluster_radii, offset_x)
-
-        # (filtered_centers, filterd_radii, filtered_num_candidates) = self._check_consistency(
-        #     cluster_centers, cluster_radii, num_candidates,
-        # )
-
-        # cr_list = self._fill_missing_crs(
-        #     filtered_centers, filterd_radii, filtered_num_candidates,
-        # )
+        return polar_candidates, pupil_center_flipped
 
 
-    def _cluster_candidates(
+    def _try_initialize_slots(self, polar_candidates: list[dict]) -> None:
+        """Initialize angularly ordered CR slots from the first good frame.
+
+        The pattern is initialized once, given enough plausible candidates.
+        """
+        if len(polar_candidates) <= self.num_crs // 2:
+            # Not enough information yet; wait for a better frame.
+            return
+
+        # Sort by angle and take up to num_crs.
+        polar_candidates_sorted = sorted(polar_candidates, key=lambda c: c["angle"])
+        selected = polar_candidates_sorted[: self.num_crs]
+
+        self._slots = [
+            _CrSlot(
+                center_flipped=pc["center_flipped"],
+                angle=pc["angle"],
+                radius=pc["radius"],
+                missing_count=0,
+            )
+            for pc in selected
+        ]
+        self._initialized = True
+        self.logger.debug("Initialized CR pattern with %d slots", len(self._slots))
+
+
+    def _match_candidates_to_buffer(
         self,
-        centers: np.ndarray[float],
-        radii: np.ndarray[float],
-    ) -> tuple[np.ndarray[np.dtype[float]], np.ndarray[np.dtype[float]], int]:
-        """Cluster candidates and filter obvious outliers.
-
-        The idea:
-            1. Compute pairwise distances between all candidates.
-            2. For each candidate i, count how many other candidates lie
-                within self.cluster_radius (including itself).
-            3. Take the candidate with the highest neighbor count as the
-                "seed" of the cluster.
-            4. Define the cluster as all candidates within self.cluster_radius
-                of this seed.
-
-        Args:
-            centers:
-                Candidate centers, shape (M, 2). Each row is (cx, cy).
-            radii:
-                Candidate radii, shape (M,) or (M, 1). The shape is not
-                changed here, only subsetted by the cluster indices.
+        polar_candidates: list[dict],
+    ) -> tuple[dict[int, int], list[float], list[float]]:
+        """Match polar candidates to existing slots by angle (and loosely radius).
 
         Returns:
-            cluster_centers:
-                Centers of candidates belonging to the densest cluster,
-                shape (K, 2), where K is the cluster size.
-            cluster_radii:
-                Radii of candidates belonging to the densest cluster,
-                shape (K,) or (K, 1) matching the input shape.
-            num_candidates:
-                Number of candidates in the cluster (K). If there were no
-                input candidates, K = 0 and the returned arrays are empty.
+            matched_indices:
+                Mapping slot_index -> polar_candidate_index that was matched.
+            angle_deltas:
+                List of (new_angle - previous_angle) for matched slots.
+            radius_deltas:
+                List of (new_radius - previous_radius) for matched slots.
 
         """
-        # No candidates at all -> return empty cluster.
-        if centers.size == 0:
-            empty_centers = centers.reshape(0, 2)
-            empty_radii = radii.reshape(0, *radii.shape[1:])
-            return empty_centers, empty_radii, 0
+        matched_indices: dict[int, int] = {}
+        used_candidate_indices: set[int] = set()
+        angle_deltas: list[float] = []
+        radius_deltas: list[float] = []
 
-        # Ensure we have (M, 2) shape for centers.
-        centers = np.asarray(centers, dtype=np.float32)
-        max_dim_shape = 2
-        if centers.ndim != max_dim_shape or centers.shape[1] != max_dim_shape:
-            exception_msg = (f"centers must have shape (M, 2), got {centers.shape}")
-            raise ValueError(exception_msg)
+        for slot_idx, slot in enumerate(self._slots):
+            best_idx: int | None = None
+            best_angle_diff = float("inf")
 
-        # Pairwise differences: diff[i, j] = centers[i] - centers[j]
-        diff = centers[:, None, :] - centers[None, :, :]  # (M, M, 2)
+            for cand_idx, pc in enumerate(polar_candidates):
+                if cand_idx in used_candidate_indices:
+                    continue
 
-        # Euclidean distances between all pairs.
-        dists = np.linalg.norm(diff, axis=2)  # (M, M)
+                # Angular difference on a circle.
+                diff = abs(pc["angle"] - slot.angle)
+                if diff > math.pi:
+                    diff = 2.0 * math.pi - diff
 
-        # For each candidate i, count neighbors within cluster_radius
-        # (including itself).
-        neighbor_counts = np.sum(dists <= self.cluster_radius, axis=1)  # (M,)
+                if diff > self.angle_threshold_rad:
+                    continue
 
-        # Index of the candidate with the highest neighbor count.
-        seed_idx = int(np.argmax(neighbor_counts))
+                radius_diff = abs(pc["radius"] - slot.radius)
+                if slot.radius > 0 and radius_diff > self.radius_rel_threshold * slot.radius:
+                    continue
 
-        # Indices of candidates belonging to the same cluster as the seed.
-        cluster_mask = dists[seed_idx] <= self.cluster_radius
-        cluster_indices = np.nonzero(cluster_mask)[0]
+                if diff < best_angle_diff:
+                    best_angle_diff = diff
+                    best_idx = cand_idx
 
-        # Subset centers and radii to get the cluster arrays.
-        cluster_centers = centers[cluster_indices]
-        cluster_radii = radii[cluster_indices]
-        num_candidates = int(cluster_centers.shape[0])
+            if best_idx is not None:
+                used_candidate_indices.add(best_idx)
+                matched_indices[slot_idx] = best_idx
 
-        return cluster_centers, cluster_radii, num_candidates
+                pc = polar_candidates[best_idx]
+                angle_deltas.append(pc["angle"] - slot.angle)
+                radius_deltas.append(pc["radius"] - slot.radius)
+
+                # Update slot with new detection.
+                slot.center_flipped = pc["center_flipped"]
+                slot.angle = pc["angle"]
+                slot.radius = pc["radius"]
+                slot.missing_count = 0  # reset missing streak
+
+        return matched_indices, angle_deltas, radius_deltas
 
 
-    def _check_consistency(
+    def _estimate_missing_crs(
         self,
-        cluster_centers: np.ndarray[float],
-        cluster_radii: np.ndarray[float],
-        num_candidates: int,
-    ) -> tuple[np.ndarray[float], np.ndarray[float], int]:
-        """Check the relative pattern of the remaining CRs and filter obious outliers.
+        matched_indices: dict[int, int],
+        angle_deltas: list[float],
+        radius_deltas: list[float],
+    ) -> list[int]:
+        """Estimate positions of missing CRs based on previous positions.
 
-        1. Sorts candidates by vertical coordinate.
-        2. Computes relative distances and angles between candidates based on the expected pattern.
-        3. Filters candidates that deviate significantly from the expected pattern.
-
-        No temporal filtering is done here.
-
-        The current implementation is deprecated, complete new version will be done.
-
-        Args:
-            cluster_centers:
-                Candidate centers (N, 2).
-            cluster_radii:
-                Candidate radii (N, 1).
-            num_candidates:
-                Number of candidates (N).
+        For simplicity, we apply the average angular and radial motion of
+        the matched CRs to all missing slots.
 
         Returns:
-            filtered_centers:
-                Centers that passed the consistency check.
-            filterd_radii:
-                Radii that passed the consistency check.
-            filtered_count:
-                Number of candidates that passed the consistency check.
+            estimated_indices:
+                Indices of slots that were *estimated* in this frame (and should
+                be output with ``is_filled=True``).
 
         """
-        return ([0.1], [0.1], 0)  # Placeholder implementation.
+        estimated_indices: list[int] = []
+
+        if self._last_pupil_center_flipped is None:
+            return estimated_indices
+
+        # Compute average motion from matched CRs.
+        mean_d_angle = sum(angle_deltas) / len(angle_deltas) if angle_deltas else 0.0
+
+        mean_d_radius = sum(radius_deltas) / len(radius_deltas) if radius_deltas else 0.0
+
+        # Update missing slots using the average motion.
+        for idx, slot in enumerate(self._slots):
+            if idx in matched_indices:
+                # Already updated from a real detection.
+                continue
+
+            slot.angle += mean_d_angle
+            # Keep angle in [0, 2π).
+            slot.angle %= 2.0 * math.pi
+            slot.radius += mean_d_radius
+            slot.radius = max(slot.radius, 0.0)  # prevent negative radius
+
+            slot.missing_count += 1
+            if slot.missing_count > self.max_missing_frames:
+                # Currently we just keep using it; later you could drop or
+                # reinitialize the pattern here.
+                pass
+
+            estimated_indices.append(idx)
+
+        # Recompute centers for all slots around the current pupil center.
+        self._recompute_slot_centers()
+        return estimated_indices
 
 
-    def _fill_missing_crs(
+    def _recompute_slot_centers(self) -> None:
+        """Recompute slot.center_flipped from angle + radius around pupil."""
+        if self._last_pupil_center_flipped is None:
+            return
+
+        px, py = self._last_pupil_center_flipped
+        for slot in self._slots:
+            dx = slot.radius * math.cos(slot.angle)
+            dy = slot.radius * math.sin(slot.angle)
+            slot.center_flipped = (px + dx, py + dy)
+
+
+    def _create_cr_data_list(
         self,
-        cluster_centers: np.ndarray[float],
-        cluster_radii: np.ndarray[float],
-        num_candidates: int,
-    ) -> list[tuple[tuple[float, float], float, bool]]:
-        """Fill missing CRs based on the expected pattern.
-
-        Based on the expected pattern of CRs and maybe temporal information, we can estimate positions
-        of missing CRs and fill them in. This can help maintain a consistent
-        number of CRs across frames, which will be crucial for calculating CR centroid.
-
-        This is a placeholder for future implementation.
-
-        Args:
-            cluster_centers:
-                Candidate centers (N, 2).
-            cluster_radii:
-                Candidate radii (N, 1).
-            num_candidates:
-                Number of candidates (N).
-
-        Returns:
-            list of:
-                ((cx, cy), radius, is_filled)
-
-        """
-        # Placeholder implementation: return empty list.
-        return [((0.0, 0.0), 0.0, True)]  # Placeholder implementation.
-
-
-    def _pack_cr_list(
-        self,
-        centers: np.ndarray,
-        radii: np.ndarray,
-        offset_x: int = 0,
-        is_filled: np.ndarray | None = None,
+        candidates: list[tt.DTCandidate],
     ) -> list[tt.CrData]:
-        """Convert internal array representation back to a list of CR tuples.
+        """Create CrData from DTCandidate without any pattern tracking.
 
-        This is useful for testing intermediate steps: you can run one
-        step (e.g. clustering), then immediately return its reduced set
-        of CRs in the same format as create_pattern() would use.
-
-        Args:
-            centers:
-                Array of CR centers, shape (K, 2): [[cx0, cy0], [cx1, cy1], ...].
-
-            radii:
-                Array of CR radii, shape (K, 1).
-
-            is_filled:
-                Optional boolean array of shape (K, 1) indicating whether
-                each CR was synthetically filled (True) or actually
-                detected (False). If None, all CRs are marked as
-                detected (False).
-
-        Returns:
-            List of:
-                ((cx, cy), radius, is_filled)
-            in image coordinates. For the right eye, x is un-flipped
-            back to the original coordinate system.
-
+        All CRs produced here are direct detections, so ``is_filled`` is
+        always False.
         """
-        # No CRs -> empty list
-        if centers is None or centers.size == 0:
+        cr_list: list[tt.CrData] = [
+            tt.CrData(
+                center=cand.center,
+                radius=cand.radius_estimate,
+                is_filled=False,
+            )
+            for cand in candidates
+        ]
+        return cr_list
+
+
+    def _build_output(self, estimated_indices: list[int]) -> list[tt.CrData]:
+        """Convert internal slots to CrData list with correct is_filled flags."""
+        if self._last_width is None:
+            # Should not normally happen, but be defensive.
             return []
 
-        # Ensure proper shapes/dtypes
-        centers = np.asarray(centers, dtype=np.float32)
-        if centers.ndim != self.array_width or centers.shape[1] != self.array_width:
-            exception_msg = (f"centers must have shape (K, 2), got {centers.shape}")
-            raise ValueError(exception_msg)
-
-        radii = np.asarray(radii, dtype=np.float32).reshape(-1)
-        if radii.shape[0] != centers.shape[0]:
-            exception_msg = (f"radii length ({radii.shape[0]}) does not match "
-                             f"centers length ({centers.shape[0]})")
-            raise ValueError(exception_msg)
-        if is_filled is None:
-            filled = np.zeros(centers.shape[0], dtype=bool)
-        else:
-            filled = np.asarray(is_filled, dtype=bool).reshape(-1)
-            if filled.shape[0] != centers.shape[0]:
-                exception_msg = (
-                    f"is_filled length ({filled.shape[0]}) does not match "
-                    f"centers length ({centers.shape[0]})"
-                )
-                raise ValueError(exception_msg)
-
-        # Un-flip x for right eye so external users always see real image coords
-        out_centers = centers.copy()
-        if self.eye_side == "right":
-            out_centers[:, 0] *= -1.0
-
-        # Build output list
+        estimated_set = set(estimated_indices)
         cr_list: list[tt.CrData] = []
-        for (cx, cy), r, f in zip(out_centers, radii, filled, strict=True):
-            cr_data = tt.CrData(
-                center=(float(cx + offset_x), float(cy)),
-                radius=float(r),
-                is_filled=bool(f)
-            )
 
-            cr_list.append(cr_data)
-
+        for idx, slot in enumerate(self._slots):
+            x_f, y = slot.center_flipped
+            x = self._flip_x_coord(x_f, self._last_width)
+            is_filled = idx in estimated_set
+            cr_list.append(tt.CrData(center=(x, y), radius=slot.radius, is_filled=is_filled))
 
         return cr_list

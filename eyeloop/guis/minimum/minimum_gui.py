@@ -117,7 +117,8 @@ class GUI:
             try:
                 cr_list = config.engine.dataout["cr"]
                 for cr in cr_list:
-                    self.place_cross(source_rgb, cr.center, green, 2, 12)  # noqa: F405
+                    color = green if cr.is_filled else pink  # noqa: F405
+                    self.place_cross(source_rgb, cr.center, color, 2, 12)
             except Exception as e:
                 self.logger.error("CR mark error: %s", e)
 

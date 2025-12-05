@@ -6,9 +6,9 @@ import time
 import cv2
 import numpy as np
 from eyeloop import config
-from eyeloop.engine.models.cr_pattern_tracker import SimpleCRSelector
 
 from vr_core.eye_tracker import tracker_types as tt
+from vr_core.eye_tracker.eyeloop_module.eyeloop.engine.models.cr_pattern_tracker import CrPatternTracker
 from vr_core.utilities.logger_setup import setup_logger
 
 
@@ -54,11 +54,11 @@ class DistanceTransform:
         self.dt_blobs: list[tuple[tuple[float, float], float]] = []
         self.height = 0
 
-        self.cr_pattern_tracker = SimpleCRSelector(expected_count=self.number_of_cr)
+        self.cr_pattern_tracker = CrPatternTracker(side=self.eye_side, num_crs=self.number_of_cr)
 
-    def detect(  # noqa: C901
+    def detect(
         self,
-        source: np.ndarray,
+        bin_img: np.ndarray,
     ) -> tuple[float, float] | None:
         """Distance-transform based detection of circular blobs (pupil or CRs).
 
@@ -72,17 +72,16 @@ class DistanceTransform:
         self.dt_blobs = []
 
         try:
-            if source is None:
+            if bin_img is None:
                 return None
 
-            bin_img = source  # already binary (0/255) at this point
-            offset_x: int = 0
             if self.track_type == "cr":
-                bin_img = self._mask_circle(bin_img)
-            self.height = bin_img.shape[0]
+                pupil_center = self._get_pupil_center()
+                bin_img = self._mask_circle(bin_img, pupil_center)
+            shape = bin_img.shape
             # Connected components with stats (area + bounding box)
             num_labels, labels, stats, _centroids = cv2.connectedComponentsWithStats(
-                bin_img
+                bin_img,
             )
             config.engine.cr_processor.source = bin_img
             if num_labels <= 1:
@@ -111,12 +110,12 @@ class DistanceTransform:
                 return None
 
             if self.track_type == "cr":
-                self._process_crs(candidates, offset_x, max_blobs)
+                self._process_crs(candidates, pupil_center, shape, max_blobs)
             elif self.track_type == "pupil":
                 self._process_pupil(candidates)
             else:
                 self.logger.error(
-                    "Unknown track_type in center_adj_dt: %s", self.track_type
+                    "Unknown track_type in center_adj_dt: %s", self.track_type,
                 )
 
             self.time_center_adj_dt = time.perf_counter_ns() / 1e9
@@ -129,20 +128,29 @@ class DistanceTransform:
             self.logger.info("DT center_adj failed with error for %s: %s", self.track_type, e)
             return None
 
+
+    def _get_pupil_center(self) -> tuple[float, float] | None:
+        """Get the current pupil center from dataout."""
+        pupil_data = config.engine.dataout.get("pupil")
+        pupil_center = getattr(pupil_data, "center", None) if pupil_data else None
+        if pupil_center is None or len(pupil_center) != 2:  # noqa: PLR2004
+            error = "Pupil center is not available for masking."
+            raise ValueError(error)
+
+        px, py = float(pupil_center[0]), float(pupil_center[1])
+        return (px, py)
+
+
     def _mask_circle(
         self,
         bin_img: np.ndarray,
+        pupil_center: tuple[float, float],
     ) -> np.ndarray:
         """Mask out everything outside a circle centered at self.center."""
         if self.mask_radius is None or self.mask_radius <= 0:
             return bin_img
 
-        pupil_data = config.engine.dataout.get("pupil")
-        pupil_center = getattr(pupil_data, "center", None) if pupil_data else None
-        if pupil_center is None or len(pupil_center) != 2:
-            raise ValueError("Pupil center is not available for masking.")
-
-        px, py = float(pupil_center[0]), float(pupil_center[1])
+        px, py = pupil_center
 
         h, w = bin_img.shape[:2]
 
@@ -190,11 +198,7 @@ class DistanceTransform:
         a_end = np.deg2rad(end_deg) % two_pi
 
         # ----- 4) Angular mask with wrap-around support -----
-        if a_start <= a_end:
-            ang_mask = (theta >= a_start) & (theta <= a_end)
-        else:
-            # Sector crosses 0° (e.g. 300°..30°)
-            ang_mask = (theta >= a_start) | (theta <= a_end)
+        ang_mask = (theta >= a_start) & (theta <= a_end) if a_start <= a_end else (theta >= a_start) | (theta <= a_end)
 
         # ----- 5) Radial mask (disc; if you want a ring, add inner radius) -----
         rad_mask = r <= float(self.mask_radius)
@@ -223,24 +227,19 @@ class DistanceTransform:
         ] = []  # (center, r_est, circularity, score)
 
         # shorthand for OpenCV stat indices
-        LEFT = cv2.CC_STAT_LEFT
-        TOP = cv2.CC_STAT_TOP
-        WIDTH = cv2.CC_STAT_WIDTH
-        HEIGHT = cv2.CC_STAT_HEIGHT
-        AREA = cv2.CC_STAT_AREA
-
+        left = cv2.CC_STAT_LEFT
+        top = cv2.CC_STAT_TOP
+        width = cv2.CC_STAT_WIDTH
+        height = cv2.CC_STAT_HEIGHT
+        area = cv2.CC_STAT_AREA
         for lbl in range(1, num_labels):
             # --- Basic geometric properties from stats ---
-            x = int(stats[lbl, LEFT])
-            y = int(stats[lbl, TOP])
-            w = int(stats[lbl, WIDTH])
-            h = int(stats[lbl, HEIGHT])
-            area = float(stats[lbl, AREA])
+            x = int(stats[lbl, left])
+            y = int(stats[lbl, top])
+            w = int(stats[lbl, width])
+            h = int(stats[lbl, height])
+            area = float(stats[lbl, area])
 
-            # if self.track_type == "cr" and self.eye_side == "Left" and y >= self.height // 2:
-            #     self.logger.info(
-            #         "Area: %f", area
-            #     )
             # area check (too small to be a valid blob)
             if area < (self.min_radius ** 2 * np.pi):
                 # if self.track_type == "cr":
@@ -264,8 +263,6 @@ class DistanceTransform:
             _, max_val, _, max_loc = cv2.minMaxLoc(dist)
             r_est = float(max_val)
 
-            # if self.track_type == "cr" and self.eye_side == "Left" and y >= self.height // 2:
-            #     self.logger.info("Estimated radius: %f", r_est)
             # radius range check
             if r_est < self.min_radius or r_est > self.max_radius:
                 # if self.track_type == "cr":
@@ -283,8 +280,7 @@ class DistanceTransform:
             if expected_area <= 0:
                 continue
             circularity = area / expected_area
-            # if self.track_type == "cr" and self.eye_side == "Left" and y >= self.height // 2:
-            #     self.logger.info("Circularity: %f", circularity)
+
             if not (self.circularity_min <= circularity <= self.circularity_max):
                 # shape too skinny / weird / incomplete
                 # if self.track_type == "cr":
@@ -302,8 +298,6 @@ class DistanceTransform:
             w_f = float(w)
             aspect = max(h_f, w_f) / max(1.0, min(h_f, w_f))  # avoid div-by-zero
 
-            # if self.track_type == "cr" and self.eye_side == "Left" and y >= self.height // 2:
-            #     self.logger.info("Aspect ratio: %f", aspect)
             if aspect > self.aspect_ratio_max:
                 # very elongated blob, probably not a pupil / CR
                 continue
@@ -351,13 +345,18 @@ class DistanceTransform:
     def _process_crs(
         self,
         candidates: list[tt.DTCandidate],
-        offset_x: int,
+        pupil_center: tuple[float, float],
+        shape: tuple[int, int],
         max_blobs: int,
     ) -> None:
         """Process CR candidates to select the best ones."""
-
         candidates.sort(key=lambda c: c.score)
         candidates = candidates[:max_blobs]
+
+        filtered_candidates = self.cr_pattern_tracker.update_candidates(candidates, pupil_center, shape)
+
+        config.engine.dataout[self.track_type] = filtered_candidates
+
         # try:
         #     for i in range(len(candidates)):
         #         center = candidates[i].center
@@ -369,10 +368,6 @@ class DistanceTransform:
         #         self.dt_blobs.append(
         #             tt.CrData(center, radius, False)
         #         )
-        # except Exception as e:  # noqa: BLE001
+        # except Exception as e:
         #     self.logger.warning("CR processing failed with error: %s", e)
         # config.engine.dataout[self.track_type] = self.dt_blobs
-
-        filtered_candidates = self.cr_pattern_tracker.create_pattern(candidates, offset_x)
-
-        config.engine.dataout[self.track_type] = filtered_candidates

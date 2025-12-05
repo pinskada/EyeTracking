@@ -29,7 +29,7 @@ class SimpleCRSelector:
     def __init__(  # noqa: PLR0913
         self,
         expected_count: int,
-        cluster_radius: float = 80.0,
+        cluster_radius: float = 120.0,
         sep_min_x: float = 5.0,
         sep_min_y: float = 5.0,
         temporal_alpha: float = 0.5,
@@ -124,16 +124,22 @@ class SimpleCRSelector:
         self.logger.info(f"Received {len(candidates)} candidates for pattern selection.")
         if self.eye_side == "right":
             # Flip x-coordinates for right eye to simplify pattern logic.
-            candidates = [(( -c[0][0], c[0][1]), c[1], c[2], c[3]) for c in candidates]
+            # candidates = [(( -c.center[0], c.center[1]), c.area, c.circularity, c.score) for c in candidates]
+            for c in candidates:
+                c.center = ( -c.center[0], c.center[1])
 
         # Convert centers and radii to arrays for easier math.
-        centers = np.array([c[0] for c in candidates], dtype=np.float32)  # (M, 2)
-        radii = np.array([c[1] for c in candidates], dtype=np.float32)    # (M, 1)
+        centers = np.array([c.center for c in candidates], dtype=np.float32)  # (M, 2)
+        radii = np.array([c.radius_estimate for c in candidates], dtype=np.float32)    # (M, 1)
 
-        # Find densest cluster of candidates.
-        (cluster_centers, cluster_radii, num_candidates) = self._cluster_candidates(  # noqa: RUF059
-            centers, radii,
-        )
+        try:
+            # Find densest cluster of candidates.
+            (cluster_centers, cluster_radii, num_candidates) = self._cluster_candidates(  # noqa: RUF059
+                centers, radii,
+            )
+        except Exception as e:
+            self.logger.error("CR clustering error: %s", e)
+            return []
 
         self.logger.info(f"Clustered to {num_candidates} candidates.")
         return self._pack_cr_list(cluster_centers, cluster_radii, offset_x)
@@ -291,8 +297,8 @@ class SimpleCRSelector:
         self,
         centers: np.ndarray,
         radii: np.ndarray,
-        is_filled: np.ndarray | None = None,
         offset_x: int = 0,
+        is_filled: np.ndarray | None = None,
     ) -> list[tt.CrData]:
         """Convert internal array representation back to a list of CR tuples.
 

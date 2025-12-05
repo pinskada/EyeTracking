@@ -140,6 +140,7 @@ class Shape:
         self.circularity_min = 0.0 # Minimum circularity for pupil detection
         self.circularity_max = 1000 # Maximum circularity for pupil detection
         self.aspect_ratio_max = 1000 # Minimum aspect ratio for pupil detection
+        self.mask_radius = 100.0  # Mask radius around pupil center
 
         self.w_r = 0.4   # Score weight for radius
         self.w_c = 0.4   # Score weight for circularity
@@ -154,6 +155,7 @@ class Shape:
             self.circularity_min,
             self.circularity_max,
             self.aspect_ratio_max,
+            self.mask_radius,
             weights=(self.w_r, self.w_c, self.w_d),
             number_of_points=self.number_of_cr,
         )
@@ -211,11 +213,14 @@ class Shape:
         if self.track_type == "pupil":
             self.pupil_fit(time_2)
         else:
-            center = self.distance_transform.detect(self.source)
-            self.time_dt_fit += time.perf_counter_ns() / 1e9 - time_2
-            if center is not None:
-                self.center = center
-
+            if config.engine.dataout.get("pupil"):
+                center = self.distance_transform.detect(self.source)
+                self.time_dt_fit += time.perf_counter_ns() / 1e9 - time_2
+                if center is not None:
+                    self.center = center
+            else:
+                config.engine.dataout[self.track_type] = ()
+                return
         if self.timing_cycle == self.print_cycle:
             self._log_timings()
             self.timing_cycle = 0

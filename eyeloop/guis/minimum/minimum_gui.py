@@ -102,6 +102,13 @@ class GUI:
                     tuple_int((pp.radius, pp.radius)),
                     0, 0, 360, red, 1, # noqa: F405
                 )
+                radius = config.engine.cr_processor.distance_transform.mask_radius
+                cv2.ellipse(
+                        source_rgb,
+                        tuple_int(pp.center),
+                        tuple_int((radius, radius)),
+                        0, 0, 360, blue, 1, # noqa: F405
+                    )
                 self.place_cross(source_rgb, pp.center, red, 1, 20)  # noqa: F405
             except Exception as e:
                 self.logger.error("Pupil mark error: %s", e)

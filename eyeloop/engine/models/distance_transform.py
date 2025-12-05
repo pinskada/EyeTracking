@@ -23,6 +23,7 @@ class DistanceTransform:
         circularity_min: float,
         circularity_max: float,
         aspect_ratio_max: float,
+        mask_radius: float | None = None,
         weights: tuple[float, float, float] = (1.0, 1.0, 1.0),
         number_of_points: int | None = None,
     ) -> None:
@@ -33,12 +34,13 @@ class DistanceTransform:
         self.circularity_min = circularity_min
         self.circularity_max = circularity_max
         self.aspect_ratio_max = aspect_ratio_max
+        self.mask_radius = mask_radius
         self.w_r, self.w_c, self.w_d = weights
         self.number_of_cr = number_of_points if number_of_points is not None else 1
 
-        # NOTE: for CR tracking the original code never updated self.center,
-        # so it typically stays -1 and prev_center is None. We keep that
-        # behaviour for compatibility.
+        self.mask_angle_start_deg = 110.0
+        self.mask_angle_end_deg = 360.0
+
         self.center: tuple[float, float] | int = -1
 
         self.eye_side = config.arguments.side
@@ -76,18 +78,13 @@ class DistanceTransform:
             bin_img = source  # already binary (0/255) at this point
             offset_x: int = 0
             if self.track_type == "cr":
-                if self.eye_side == "Left":
-                    # If side is left, select only left half of the image
-                    bin_img = bin_img[:, : bin_img.shape[1] // 2]
-                else:
-                    # If side is right, select only right half of the image
-                    offset_x = bin_img.shape[1] // 2
-                    bin_img = bin_img[:, bin_img.shape[1] // 2 :]
+                bin_img = self._mask_circle(bin_img)
             self.height = bin_img.shape[0]
             # Connected components with stats (area + bounding box)
             num_labels, labels, stats, _centroids = cv2.connectedComponentsWithStats(
                 bin_img
             )
+            config.engine.cr_processor.source = bin_img
             if num_labels <= 1:
                 # no foreground at all
                 # if self.track_type == "cr":
@@ -129,9 +126,86 @@ class DistanceTransform:
             return self.center  # noqa: TRY300
 
         except Exception as e:  # noqa: BLE001
-            self.logger.warning("DT center_adj failed with error for %s: %s", self.track_type, e)
+            self.logger.info("DT center_adj failed with error for %s: %s", self.track_type, e)
             return None
 
+    def _mask_circle(
+        self,
+        bin_img: np.ndarray,
+    ) -> np.ndarray:
+        """Mask out everything outside a circle centered at self.center."""
+        if self.mask_radius is None or self.mask_radius <= 0:
+            return bin_img
+
+        pupil_data = config.engine.dataout.get("pupil")
+        pupil_center = getattr(pupil_data, "center", None) if pupil_data else None
+        if pupil_center is None or len(pupil_center) != 2:
+            raise ValueError("Pupil center is not available for masking.")
+
+        px, py = float(pupil_center[0]), float(pupil_center[1])
+
+        h, w = bin_img.shape[:2]
+
+        # Clamp pupil center to valid range (safety)
+        cx = float(np.clip(px, 0, w - 1))
+        cy = float(np.clip(py, 0, h - 1))
+
+        # ----- 1) Build coordinate grid relative to pupil center -----
+        yy, xx = np.meshgrid(
+            np.arange(h, dtype=np.float32),
+            np.arange(w, dtype=np.float32),
+            indexing="ij",
+        )
+        dx = xx - cx
+        dy = yy - cy
+
+        # Radius
+        r = np.sqrt(dx * dx + dy * dy)
+
+        # ----- 2) Screen-space angles -----
+        # We want:
+        #   0°   at "up"    (0, -1)
+        #   90°  at "right" (1,  0)
+        #   180° at "down"  (0,  1)
+        #   270° at "left"  (-1, 0)
+        #
+        # With image coords (y down), this is achieved by:
+        #   theta = atan2(dx, -dy)
+        theta = np.arctan2(dx, -dy)  # range [-pi, pi]
+        two_pi = 2.0 * np.pi
+        theta = (theta + two_pi) % two_pi  # -> [0, 2*pi)
+
+        # ----- 3) Base sector for LEFT eye -----
+        start_deg = float(self.mask_angle_start_deg)
+        end_deg = float(self.mask_angle_end_deg)
+
+        # Mirror horizontally for RIGHT eye:
+        #   theta' = 180° - theta  (mod 360)
+        # So interval [start, end] becomes [180-end, 180-start].
+        if self.eye_side == "Right":
+            # Horizontal mirror across vertical axis: angle' = 360° - angle
+            start_deg, end_deg = (360.0 - end_deg) % 360.0, (360.0 - start_deg) % 360.0
+
+        a_start = np.deg2rad(start_deg) % two_pi
+        a_end = np.deg2rad(end_deg) % two_pi
+
+        # ----- 4) Angular mask with wrap-around support -----
+        if a_start <= a_end:
+            ang_mask = (theta >= a_start) & (theta <= a_end)
+        else:
+            # Sector crosses 0° (e.g. 300°..30°)
+            ang_mask = (theta >= a_start) | (theta <= a_end)
+
+        # ----- 5) Radial mask (disc; if you want a ring, add inner radius) -----
+        rad_mask = r <= float(self.mask_radius)
+
+        mask = ang_mask & rad_mask
+
+        out = bin_img.copy()
+        out[~mask] = 0
+        # out[mask] = 250
+
+        return out
 
     def _filter_blobs(
         self,
@@ -281,22 +355,24 @@ class DistanceTransform:
         max_blobs: int,
     ) -> None:
         """Process CR candidates to select the best ones."""
-        # filtered_candidates = self.cr_pattern_tracker.create_pattern(candidates, offset_x)
-        # config.engine.dataout[self.track_type] = filtered_candidates
 
         candidates.sort(key=lambda c: c.score)
         candidates = candidates[:max_blobs]
-        try:
-            for i in range(len(candidates)):
-                center = candidates[i].center
-                radius = candidates[i].radius_estimate
+        # try:
+        #     for i in range(len(candidates)):
+        #         center = candidates[i].center
+        #         radius = candidates[i].radius_estimate
 
-                center = (center[0] + offset_x, center[1])
+        #         center = (center[0] + offset_x, center[1])
 
-                # Convert from cropped coordinates to full-image coordinates
-                self.dt_blobs.append(
-                    tt.CrData(center, radius, False)
-                )
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning("CR processing failed with error: %s", e)
-        config.engine.dataout[self.track_type] = self.dt_blobs
+        #         # Convert from cropped coordinates to full-image coordinates
+        #         self.dt_blobs.append(
+        #             tt.CrData(center, radius, False)
+        #         )
+        # except Exception as e:  # noqa: BLE001
+        #     self.logger.warning("CR processing failed with error: %s", e)
+        # config.engine.dataout[self.track_type] = self.dt_blobs
+
+        filtered_candidates = self.cr_pattern_tracker.create_pattern(candidates, offset_x)
+
+        config.engine.dataout[self.track_type] = filtered_candidates

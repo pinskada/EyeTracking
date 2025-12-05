@@ -40,7 +40,7 @@ class GUI:
         self.bin_stock = np.zeros((height, width))
         self.bin_P = self.bin_stock.copy()
 
-        scale = 0.8
+        scale = 1.0
 
         width = int(np.floor(width * scale))
         height = int(np.floor(height * scale))
@@ -91,7 +91,7 @@ class GUI:
             self.logger.error("Cross placement error at center: %s", center)
 
 
-    def pupil(self, source_rgb: np.ndarray) -> None:
+    def draw(self, source_rgb: np.ndarray) -> None:
         """Draw pupil and CR marks on the source image."""
         if config.engine.dataout["pupil"]:
             try:
@@ -117,10 +117,30 @@ class GUI:
             try:
                 cr_list = config.engine.dataout["cr"]
                 for cr in cr_list:
-                    color = green if cr.is_filled else pink  # noqa: F405
+                    color = pink if cr.is_filled else green  # noqa: F405
                     self.place_cross(source_rgb, cr.center, color, 2, 12)
             except Exception as e:
                 self.logger.error("CR mark error: %s", e)
+
+        if config.engine.dataout["cr"] and config.engine.dataout["pupil"]:
+            try:
+                pp = config.engine.dataout["pupil"]
+                cr_list = config.engine.dataout["cr"]
+                x_coords = [cr.center[0] for cr in cr_list]
+                y_coords = [cr.center[1] for cr in cr_list]
+
+                centroid_x = sum(x_coords) / len(cr_list)
+                centroid_y = sum(y_coords) / len(cr_list)
+                self.place_cross(source_rgb, (centroid_x, centroid_y), pink, 2, 12) # noqa: F405
+                cv2.line(
+                    source_rgb,
+                    tuple_int(pp.center),
+                    tuple_int((centroid_x, centroid_y)),
+                    pink, # noqa: F405
+                    3,
+                )
+            except Exception as e:
+                self.logger.error("Pupil-CR line error: %s", e)
 
 
     def update(self, img: np.ndarray) -> None:
@@ -128,7 +148,7 @@ class GUI:
         self.print_cycle += 1
         if self.print_cycle == self.print_fps:
             source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            self.pupil(source_rgb)
+            self.draw(source_rgb)
 
             pupil_area = self.pupil_processor.source
             cv2.imshow(self.preview, source_rgb)

@@ -14,7 +14,7 @@ class _CrSlot:
     """Internal representation of one CR in the pattern (in flipped coords).
 
     All geometry is stored in a coordinate system where the *pattern side*
-    is the same for both eyes. For the left eye, x is flipped so that
+    is the same for both eyes. For the Left eye, x is flipped so that
     the CRs always appear on the same side of the pupil in this internal
     space.
 
@@ -63,8 +63,8 @@ class CrPatternTracker:
             num_crs: Number of corneal reflections to track.
 
         """
-        if side not in ("left", "right"):
-            self.logger.error("CrPatternTracker side should be 'left' or 'right', got %s", side)
+        if side not in ("Left", "Right"):
+            self.logger.error("CrPatternTracker side should be 'Left' or 'Right', got %s", side)
 
         self.logger = setup_logger(f"CrPatternTracker_{side}")
 
@@ -112,7 +112,7 @@ class CrPatternTracker:
             List of filtered CR data.
 
         """
-        # 1. Flip x coordinates of left eye pupil and crs to make the algorithm eye side consistent
+        # 1. Flip x coordinates of Left eye pupil and crs to make the algorithm eye side consistent
         # 2. Assume pupil center as a rough center of the circle formed by the CRs (the pupil center relative to
         #    the crs positions will change slightly between frames) -> compute their angles and distances
         # 3. If first run, save num_crs of crs to a buffer in angle increasing order, or wait several frames
@@ -122,7 +122,7 @@ class CrPatternTracker:
         # 6. Update buffer with new cr positions
         # 7. If a cr is not present in the new candidates, estimate its new position based on previous position
         #    and average movement of other crs
-        # 8. Flip back x coordinates of left eye cr before returning
+        # 8. Flip back x coordinates of Left eye cr before returning
         # 9. Return updated a list[tt.CrData] of crs
 
         # If only half or less (0-3/6) of the required CRs are detected, return empty list
@@ -187,18 +187,18 @@ class CrPatternTracker:
     # ##################### Internal helpers #####################
 
     def _flip_x_coord(self, x: float, width: int) -> float:
-        """Flip x-coordinate for the left eye so that pattern side matches.
+        """Flip x-coordinate for the Left eye so that pattern side matches.
 
         Right eye: x is returned unchanged.
         Left eye:  x is mirrored around the vertical center line.
         """
-        if self.side == "left":
+        if self.side == "Left":
             return float(width - 1 - x)
         return float(x)
 
 
     def _flip_point(self, pt: tuple[float, float], width: int) -> tuple[float, float]:
-        """Flip a 2D point in x if needed for the left eye."""
+        """Flip a 2D point in x if needed for the Left eye."""
         x, y = pt
         return self._flip_x_coord(x, width), float(y)
 

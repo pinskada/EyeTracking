@@ -97,12 +97,20 @@ class DistanceTransform:
             if isinstance(self.center, tuple) and len(self.center) == center_length:
                 prev_center = self.center
 
-            candidates = self._filter_blobs(
-                num_labels,
-                labels,
-                stats,
-                prev_center,
-            )
+            try:
+                candidates = self._filter_blobs(
+                    num_labels,
+                    labels,
+                    stats,
+                    prev_center,
+                )
+            except Exception as e:  # noqa: BLE001
+                self.logger.info(
+                    "DT center_adj: blob filtering failed with error for %s: %s",
+                    self.track_type,
+                    e,
+                )
+                return None
             if not candidates:
                 # nothing passed all checks
                 self.time_center_adj_dt = time.perf_counter_ns() / 1e9
@@ -231,14 +239,14 @@ class DistanceTransform:
         top = cv2.CC_STAT_TOP
         width = cv2.CC_STAT_WIDTH
         height = cv2.CC_STAT_HEIGHT
-        area = cv2.CC_STAT_AREA
+        area_cv = cv2.CC_STAT_AREA
         for lbl in range(1, num_labels):
             # --- Basic geometric properties from stats ---
             x = int(stats[lbl, left])
             y = int(stats[lbl, top])
             w = int(stats[lbl, width])
             h = int(stats[lbl, height])
-            area = float(stats[lbl, area])
+            area = float(stats[lbl, area_cv])
 
             # area check (too small to be a valid blob)
             if area < (self.min_radius ** 2 * np.pi):
@@ -353,21 +361,21 @@ class DistanceTransform:
         candidates.sort(key=lambda c: c.score)
         candidates = candidates[:max_blobs]
 
-        filtered_candidates = self.cr_pattern_tracker.update_candidates(candidates, pupil_center, shape)
+        # filtered_candidates = self.cr_pattern_tracker.update_candidates(candidates, pupil_center, shape)
 
-        config.engine.dataout[self.track_type] = filtered_candidates
+        # config.engine.dataout[self.track_type] = filtered_candidates
 
-        # try:
-        #     for i in range(len(candidates)):
-        #         center = candidates[i].center
-        #         radius = candidates[i].radius_estimate
+        try:
+            for i in range(len(candidates)):
+                center = candidates[i].center
+                radius = candidates[i].radius_estimate
 
-        #         center = (center[0] + offset_x, center[1])
+                center = (center[0], center[1])
 
-        #         # Convert from cropped coordinates to full-image coordinates
-        #         self.dt_blobs.append(
-        #             tt.CrData(center, radius, False)
-        #         )
-        # except Exception as e:
-        #     self.logger.warning("CR processing failed with error: %s", e)
-        # config.engine.dataout[self.track_type] = self.dt_blobs
+                # Convert from cropped coordinates to full-image coordinates
+                self.dt_blobs.append(
+                    tt.CrData(center, radius, False)
+                )
+        except Exception as e:
+            self.logger.warning("CR processing failed with error: %s", e)
+        config.engine.dataout[self.track_type] = self.dt_blobs

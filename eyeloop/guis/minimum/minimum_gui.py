@@ -40,7 +40,7 @@ class GUI:
         self.bin_stock = np.zeros((height, width))
         self.bin_P = self.bin_stock.copy()
 
-        scale = 1.0
+        scale = 0.5
 
         width = int(np.floor(width * scale))
         height = int(np.floor(height * scale))

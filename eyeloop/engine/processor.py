@@ -140,7 +140,7 @@ class Shape:
         self.circularity_min = 0.0 # Minimum circularity for pupil detection
         self.circularity_max = 1000 # Maximum circularity for pupil detection
         self.aspect_ratio_max = 1000 # Minimum aspect ratio for pupil detection
-        self.mask_radius = 100.0  # Mask radius around pupil center
+        self.mask_radius = 150.0  # Mask radius around pupil center
 
         self.w_r = 0.4   # Score weight for radius
         self.w_c = 0.4   # Score weight for circularity

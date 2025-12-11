@@ -214,13 +214,18 @@ class Shape:
             self.pupil_fit(time_2)
         else:
             if config.engine.dataout.get("pupil"):
+                # self.logger.info("CR before distance transform.")
                 center = self.distance_transform.detect(self.source)
+                # self.logger.info("CR after distance transform.")
                 self.time_dt_fit += time.perf_counter_ns() / 1e9 - time_2
                 if center is not None:
                     self.center = center
             else:
+                # self.logger.info("No pupil data available before distance transform.")
                 config.engine.dataout[self.track_type] = ()
                 return
+        # if self.track_type == "cr":
+        #     self.logger.info(self.timing_cycle)
         if self.timing_cycle == self.print_cycle:
             self._log_timings()
             self.timing_cycle = 0
@@ -525,7 +530,10 @@ class Shape:
 
     def _log_timings(self) -> None:  # track_type: ignore[operator]
         """Log the timing information for each processing step."""
+        # if self.track_type == "cr":
+            # self.logger.info("CR Timing Log 1")
         if self.profile_enabled:
+            # self.logger.info("CR Timing Log 2")
             try:
                 if self.track_type == "pupil":
                     total_time = (self.time_threshold + self.time_walkout_t +
@@ -552,6 +560,8 @@ class Shape:
                         total_time,
                     )
                 elif self.track_type == "cr":
+                    # self.logger.info("CR Timing Log 3")
+
                     self.logger.info(
                         "CR:: TH: %.3fms; DT: %.3fms; T: %.3fms",
                         (self.time_threshold / self.print_cycle) * 1000,

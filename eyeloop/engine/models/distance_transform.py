@@ -76,6 +76,7 @@ class DistanceTransform:
                 return None
 
             if self.track_type == "cr":
+                # self.logger.info("DT center_adj: masking for CRs.")
                 pupil_center = self._get_pupil_center()
                 bin_img = self._mask_circle(bin_img, pupil_center)
             shape = bin_img.shape
@@ -465,6 +466,7 @@ class DistanceTransform:
 
         # config.engine.dataout[self.track_type] = filtered_candidates
 
+        # self.logger.info("Outputting %d CR candidates.", len(candidates))
         try:
             for i in range(len(candidates)):
                 center = candidates[i].center

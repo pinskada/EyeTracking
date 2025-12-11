@@ -150,6 +150,106 @@ class DistanceTransform:
 
 
     def _mask_circle(
+            self,
+            bin_img: np.ndarray,
+            pupil_center: tuple[float, float],
+        ) -> np.ndarray:
+        """Mask out everything outside a (possibly sector-limited) circle around the pupil.
+
+        Uses OpenCV drawing ops (circle + filled polygon) instead of per-pixel trig,
+        which is much faster than the previous numpy-based implementation.
+        """
+        # No masking configured → return as-is
+        if self.mask_radius is None or self.mask_radius <= 0:
+            return bin_img
+
+        h, w = bin_img.shape[:2]
+        px, py = pupil_center
+
+        # Clamp pupil center into image bounds for safety
+        cx = int(np.clip(px, 0, w - 1))
+        cy = int(np.clip(py, 0, h - 1))
+        radius = int(self.mask_radius)
+
+        # --- 1) Prepare angle range in degrees (0-360) ---
+
+        start_deg = float(self.mask_angle_start_deg)
+        end_deg = float(self.mask_angle_end_deg)
+
+        # Mirror horizontally for RIGHT eye (same logic as before)
+        # angle' = 360° - angle
+        if self.eye_side == "Right":
+            start_deg, end_deg = (360.0 - end_deg) % 360.0, (360.0 - start_deg) % 360.0
+
+        # Normalize to [0, 360)
+        start_deg = start_deg % 360.0
+        end_deg = end_deg % 360.0
+
+        # If the sector covers (almost) full circle, just draw a disc
+        sweep = (end_deg - start_deg) % 360.0
+        full_circle = sweep >= 359.0 or np.isclose(sweep, 0.0, atol=1e-2)
+
+        # --- 2) Build mask image ---
+
+        mask = np.zeros((h, w), dtype=np.uint8)
+
+        if full_circle:
+            # Simple filled circle around the pupil
+            cv2.circle(mask, (cx, cy), radius, 255, thickness=-1)
+        else:
+            def draw_sector(s_deg: float, e_deg: float) -> None:
+                """Draw a filled circular sector from s_deg to e_deg."""
+                # Ensure angles are in ascending order
+                s_deg = s_deg % 360.0
+                e_deg = e_deg % 360.0
+
+                # If still wrapping (e < s), shift end by +360 for linspace
+                if e_deg < s_deg:
+                    e_deg += 360.0
+
+                # Step ~5° along the arc (at least a few points)
+                n_steps = max(8, int((e_deg - s_deg) / 5.0))
+                angles_deg = np.linspace(s_deg, e_deg, n_steps, dtype=np.float32)
+                angles_rad = np.deg2rad(angles_deg)
+
+                # Our convention:
+                #   0°   = up    (0, -1)
+                #   90°  = right (1,  0)
+                #   180° = down  (0,  1)
+                #   270° = left  (-1, 0)
+                # matches:
+                #   x = cx + r * sin(theta)
+                #   y = cy - r * cos(theta)
+                xs = cx + radius * np.sin(angles_rad)
+                ys = cy - radius * np.cos(angles_rad)
+
+                # Build polygon: center -> arc -> back to center
+                pts = np.stack(
+                    [
+                        np.concatenate([[cx], xs, [cx]]),
+                        np.concatenate([[cy], ys, [cy]]),
+                    ],
+                    axis=1,
+                )
+                pts = np.round(pts).astype(np.int32)
+
+                cv2.fillConvexPoly(mask, pts, 255)
+
+            # Non-wrapping sector (start <= end): draw once
+            if start_deg <= end_deg:
+                draw_sector(start_deg, end_deg)
+            else:
+                # Wrapping sector (e.g. 300° → 60°): split into [start, 360] U [0, end]
+                draw_sector(start_deg, 360.0)
+                draw_sector(0.0, end_deg)
+
+        # --- 3) Apply mask to binary image ---
+
+        # mask is single-channel; this works for both 1- and 3-channel bin_img
+        return cv2.bitwise_and(bin_img, bin_img, mask=mask)
+
+
+    def _mask_circle0(
         self,
         bin_img: np.ndarray,
         pupil_center: tuple[float, float],
@@ -374,7 +474,7 @@ class DistanceTransform:
 
                 # Convert from cropped coordinates to full-image coordinates
                 self.dt_blobs.append(
-                    tt.CrData(center, radius, False)
+                    tt.CrData(center, radius, False),
                 )
         except Exception as e:
             self.logger.warning("CR processing failed with error: %s", e)

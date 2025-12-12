@@ -146,6 +146,7 @@ class GUI:
     def update(self, img: np.ndarray) -> None:
         """Update the GUI with the latest image and data."""
         self.print_cycle += 1
+
         if self.print_cycle == self.print_fps:
             source_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             self.draw(source_rgb)

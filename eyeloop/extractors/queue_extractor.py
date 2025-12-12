@@ -34,61 +34,64 @@ class QueueExtractor:
 
             # Signal to FrameProvider to fetch the next frame
             self.eye_ready_signal.set()
-            #self.logger.info("eye_ready_s set.")
 
-            pupil_data = core.dataout["pupil"]
-            cr_data = core.dataout["cr"]
+        self._enqueue_tracker_data(core)
+        self._enqueue_preview_data()
 
-            tracker_data = tt.OneSideTrackerData(
-                pupil=pupil_data,
-                crs=cr_data,
-            )
 
-            # Create message with tracking data
-            tracking_data_message = {
-                "type": "eye_data",
-                "frame_id": config.current_frame_id,
-                "data": tracker_data,
-            }
+    def _enqueue_tracker_data(self, core: Any) -> None:
+        """Enqueue tracker data into the tracker data queue."""
+        if not core.dataout["pupil"] or not core.dataout["cr"]:
+            return
 
-            # Send tracking data message via response queue
-            self.tracker_response_q.put(tracking_data_message)
-            #self.logger.info("Tracker data for %s eye sent with ID: %s.",
-            #   self.side, config.current_frame_id)
+        pupil_data = core.dataout["pupil"]
+        cr_data = core.dataout["cr"]
 
-            if config.preview != "none":
+        tracker_data = tt.OneSideTrackerData(
+            pupil=pupil_data,
+            crs=cr_data,
+        )
 
-                # Create message with image preview data
-                self.print_state += 1
-                if config.preview == "pupil":
-                    image_preview = config.engine.pupil_processor.source
-                elif config.preview == "cr":
-                    image_preview = config.engine.cr_processor.source
-                else:
-                    self.logger.error("Unknown preview type: %s", config.preview)
-                    return
+        # Create message with tracking data
+        tracking_data_message = {
+            "type": "eye_data",
+            "frame_id": config.current_frame_id,
+            "data": tracker_data,
+        }
 
-                # mean_image = np.mean(image_preview)
-                # self.logger.info("Mean image value: %s", mean_image)
-                # if config.preview and self.print_state % 50 == 0:
-                #     cv2.imwrite(f"/tmp/preview_{self.print_state}.png", image_preview)
+        # Send tracking data message via response queue
+        self.tracker_response_q.put(tracking_data_message)
 
-                bin_img = (image_preview > 0).astype(np.uint8)
-                image_height, image_width = bin_img.shape[:2]
-                bit_map = np.packbits(bin_img, axis=None, bitorder="big")
 
-                preview_image_message = {
-                    "type": "image_preview",
-                    "frame_id": config.current_frame_id,
-                    "height": image_height,
-                    "width": image_width,
-                    "bitmap": bit_map.tobytes(),
-                }
+    def _enqueue_preview_data(self) -> None:
+        """Enqueue preview data into the preview data queue."""
+        if config.preview == "none":
+            return
 
-                # Send image preview message via response queue
-                self.tracker_response_q.put(preview_image_message)
-                #self.logger.info("Tracker preview for %s eye sent with ID: %s.",
-                #   self.side, config.current_frame_id)
+        # Create message with image preview data
+        self.print_state += 1
+        if config.preview == "pupil":
+            image_preview = config.engine.pupil_processor.source
+        elif config.preview == "cr":
+            image_preview = config.engine.cr_processor.source
+        else:
+            self.logger.error("Unknown preview type: %s", config.preview)
+            return
+
+        bin_img = (image_preview > 0).astype(np.uint8)
+        image_height, image_width = bin_img.shape[:2]
+        bit_map = np.packbits(bin_img, axis=None, bitorder="big")
+
+        preview_image_message = {
+            "type": "image_preview",
+            "frame_id": config.current_frame_id,
+            "height": image_height,
+            "width": image_width,
+            "bitmap": bit_map.tobytes(),
+        }
+
+        # Send image preview message via response queue
+        self.tracker_response_q.put(preview_image_message)
 
 
     def __name__(self) -> None:

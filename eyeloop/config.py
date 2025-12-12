@@ -4,12 +4,11 @@ import multiprocessing as mp
 from multiprocessing.synchronize import Event as MpEvent
 
 import numpy as np
-
-from eyeloop.utilities.argument_parser import Arguments
 from eyeloop.engine.engine import Engine
-from eyeloop.utilities.file_manager import File_Manager
 from eyeloop.guis.minimum.minimum_gui import GUI
 from eyeloop.importers.importer import IMPORTER
+from eyeloop.utilities.argument_parser import Arguments
+from eyeloop.utilities.file_manager import File_Manager
 
 blink = np.zeros(30, dtype=np.float64)
 
@@ -30,7 +29,7 @@ eye_ready_signal: MpEvent
 tracker_shm_is_closed_s: MpEvent
 tracker_running_s: MpEvent
 
-preview = 0
+preview: str = "none"
 current_frame_id: int
 
 use_gui: bool

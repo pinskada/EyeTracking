@@ -1,7 +1,12 @@
+# ruff: noqa: ERA001, ANN401
+
+
 """Queue extractor module for sending processed data via queues."""
 
-import eyeloop.config as config
+from typing import Any
+
 import numpy as np
+from eyeloop import config
 
 import vr_core.eye_tracker.tracker_types as tt
 from vr_core.utilities.logger_setup import setup_logger
@@ -10,19 +15,20 @@ from vr_core.utilities.logger_setup import setup_logger
 class QueueExtractor:
     """Queue extractor for sending processed data via queues."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the QueueExtractor."""
         self.logger = setup_logger(f"{config.arguments.side} QueueExtractor")
         self.tracker_response_q = config.tracker_response_q
         self.side = config.arguments.side
         self.eye_ready_signal = config.eye_ready_signal
         self.print_state = 0
 
-    def activate(self):
+    def activate(self) -> None:
         """Activate the QueueExtractor."""
         #self.logger.info("Service activated.")
 
 
-    def fetch(self, core):
+    def fetch(self, core: Any) -> None:
         """Fetch processed data and send it via queues."""
         if config.importer != 0:
 
@@ -42,7 +48,7 @@ class QueueExtractor:
             tracking_data_message = {
                 "type": "eye_data",
                 "frame_id": config.current_frame_id,
-                "data": tracker_data
+                "data": tracker_data,
             }
 
             # Send tracking data message via response queue
@@ -50,11 +56,17 @@ class QueueExtractor:
             #self.logger.info("Tracker data for %s eye sent with ID: %s.",
             #   self.side, config.current_frame_id)
 
-            if config.preview:
+            if config.preview != "none":
 
                 # Create message with image preview data
                 self.print_state += 1
-                image_preview = config.engine.pupil_processor.source
+                if config.preview == "pupil":
+                    image_preview = config.engine.pupil_processor.source
+                elif config.preview == "cr":
+                    image_preview = config.engine.cr_processor.source
+                else:
+                    self.logger.error("Unknown preview type: %s", config.preview)
+                    return
 
                 # mean_image = np.mean(image_preview)
                 # self.logger.info("Mean image value: %s", mean_image)
@@ -79,11 +91,11 @@ class QueueExtractor:
                 #   self.side, config.current_frame_id)
 
 
-    def __name__(self):
+    def __name__(self) -> None:
         """Return the name of the extractor."""
         return "QueueExtractor"
 
 
     #  pylint: disable=unused-argument
-    def release(self, core):
+    def release(self, core: Any) -> None:
         """Release resources held by the QueueExtractor."""

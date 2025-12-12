@@ -197,9 +197,9 @@ class Importer:
                     blur += 1
                 config.engine.cr_processor.blur = (blur, blur)
 
-            elif msg.get("param") == "auto_search":
-                config.arguments.auto_search = msg.get("value")
-                self.logger.info("<%s> auto_search set to %d", self.side, msg.get("value"))
+            elif msg.get("param") == "mask_radius_cr":
+                config.engine.cr_processor.mask_radius = msg.get("value")
+                # self.logger.info("<%s> mask_radius_cr set to %d", self.side, msg.get("value"))
 
             elif msg.get("param") == "min_radius_pupil":
                 config.engine.pupil_processor.min_radius = msg.get("value")

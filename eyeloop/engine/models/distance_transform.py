@@ -188,7 +188,7 @@ class DistanceTransform:
 
         # If the sector covers (almost) full circle, just draw a disc
         sweep = (end_deg - start_deg) % 360.0
-        full_circle = sweep >= 359.0 or np.isclose(sweep, 0.0, atol=1e-2)
+        full_circle = sweep >= 359.0 or np.isclose(sweep, 0.0, atol=1e-2)  # noqa: PLR2004
 
         # --- 2) Build mask image ---
 
@@ -454,8 +454,8 @@ class DistanceTransform:
     def _process_crs(
         self,
         candidates: list[tt.DTCandidate],
-        pupil_center: tuple[float, float],
-        shape: tuple[int, int],
+        pupil_center: tuple[float, float],  # noqa: ARG002
+        shape: tuple[int, int],  # noqa: ARG002
         max_blobs: int,
     ) -> None:
         """Process CR candidates to select the best ones."""
@@ -476,8 +476,164 @@ class DistanceTransform:
 
                 # Convert from cropped coordinates to full-image coordinates
                 self.dt_blobs.append(
-                    tt.CrData(center, radius, False),
+                    tt.CrData(center, radius, is_filled=False),
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("CR processing failed with error: %s", e)
         config.engine.dataout[self.track_type] = self.dt_blobs
+
+
+    def estimate_cr_center_coarse_to_fine(  # noqa: PLR0913
+        self,
+        candidates: list[tt.DTCandidate],
+        pupil_center: tuple[float, float],
+        want: int = 5,
+        halfwin_px: int = 100,
+        coarse_step_px: int = 15,
+        fine_halfwin_px: int = 20,
+        fine_step_px: int = 3,
+        k_best: int = 5,
+        inlier_eps_px: float = 3.0,
+    ) -> tuple[tuple[float, float], list[tt.DTCandidate]]:
+        """Two pass CR center search.
+
+        Coarse-to-fine, vectorized estimation of the CR-ring center using a radius prior,
+        then selection of the best CR candidates.
+
+        Arguments:
+            candidates:
+                List of CR candidates (distance-transform peaks). Each has:
+                - center: (x,y) pixels
+                - score: detection score (unused here except optional tiebreaks)
+            pupil_center:
+                (x,y) pixels. Only used as a prior for where to search the CR center.
+            want:
+                Expected number of true CRs to return (typically 5).
+            halfwin_px:
+                Coarse search window half-size around pupil_center (pixels). E.g. 100 => 201x201 area.
+            coarse_step_px:
+                Pixel step for coarse grid. Higher = faster, lower = more accurate.
+            fine_halfwin_px:
+                Fine refinement window half-size around the best coarse center (pixels).
+            fine_step_px:
+                Pixel step for fine grid (usually 1).
+            k_best:
+                Robust scoring uses only the best k residuals per tested center (handles 1-2 outliers).
+                Usually set to want.
+            inlier_eps_px:
+                Optional sanity threshold for final CR selection (radial error in pixels). If it removes
+                too many, selection falls back to top-`want` by residual.
+
+        Uses:
+            self.approx_cr_radius:
+                Approximate CR ring radius in pixels (close to the true radius).
+
+        Returns:
+            cr_center:
+                Estimated CR ring center (x,y) pixels.
+            selected_crs:
+                List of selected candidates (length == min(want, len(candidates))).
+
+        """
+        if not candidates:
+            return pupil_center, []
+
+        r0 = float(self.approx_cr_radius)
+        if r0 <= 0:
+            # No radius prior -> best you can do is return top by candidate.score
+            c_sorted = sorted(candidates, key=lambda c: c.score)
+            return pupil_center, c_sorted[: min(want, len(candidates))]
+
+        pts = np.asarray([c.center for c in candidates], dtype=np.float32)  # (N,2)
+        n = int(pts.shape[0])
+        want_eff = min(want, n)
+        k = int(min(k_best, n, want_eff))
+        x0, y0 = float(pupil_center[0]), float(pupil_center[1])
+
+        # ---- coarse pass (vectorized) ----
+        coarse_center, _ = self._estimate_center_grid_vectorized(
+            pts_xy=pts,
+            center0=(x0, y0),
+            r0=r0,
+            halfwin_px=halfwin_px,
+            step_px=coarse_step_px,
+            k_best=k,
+        )
+
+        # ---- fine pass (vectorized) ----
+        fine_center, _ = self._estimate_center_grid_vectorized(
+            pts_xy=pts,
+            center0=coarse_center,
+            r0=r0,
+            halfwin_px=fine_halfwin_px,
+            step_px=fine_step_px,
+            k_best=k,
+        )
+
+         # ---- select CRs by inlier test (do NOT force want) ----
+        cx, cy = fine_center
+        d = np.sqrt((pts[:, 0] - cx) ** 2 + (pts[:, 1] - cy) ** 2)
+        resid_r = np.abs(d - r0)  # radial error in px
+
+        # Robust adaptive threshold
+        med = float(np.median(resid_r))
+        mad = float(np.median(np.abs(resid_r - med))) + 1e-6
+        sigma = 1.4826 * mad
+        eps = max(inlier_eps_px, 3.0 * sigma)  # keep your fixed eps as a floor
+
+        inlier_idx = np.nonzero(resid_r <= eps)[0]
+
+        # If not enough inliers, return what we have (or empty)
+        if len(inlier_idx) == 0:
+            return (cx, cy), []
+
+        # If too many inliers, keep best ones by residual (and optionally by candidate.score)
+        inlier_order = inlier_idx[np.argsort(resid_r[inlier_idx])]
+        inlier_order = inlier_order[:want_eff]
+
+        selected = [candidates[i] for i in inlier_order.tolist()]
+        return (cx, cy), selected
+
+
+    @staticmethod
+    def _estimate_center_grid_vectorized(  # noqa: PLR0913
+        pts_xy: np.ndarray,
+        center0: tuple[float, float],
+        r0: float,
+        halfwin_px: int,
+        step_px: int,
+        k_best: int,
+    ) -> tuple[tuple[float, float], float]:
+        """Vectorized grid search for center around center0 using a fixed radius prior r0.
+
+        Score(center) = mean of the smallest k_best values of:
+            | ||p_i - center||^2 - r0^2 |
+        (Squared-distance proxy avoids sqrt and is fast; works well for choosing the best center.)
+        """
+        pts = np.asarray(pts_xy, dtype=np.float32)
+        n = int(pts.shape[0])
+        if n == 0:
+            return (float(center0[0]), float(center0[1])), float("inf")
+
+        k = int(min(k_best, n))
+        x0, y0 = float(center0[0]), float(center0[1])
+
+        xs = np.arange(x0 - halfwin_px, x0 + halfwin_px + 1, step_px, dtype=np.float32)
+        ys = np.arange(y0 - halfwin_px, y0 + halfwin_px + 1, step_px, dtype=np.float32)
+        gx, gy = np.meshgrid(xs, ys, indexing="xy")  # (H,W)
+        centers = np.stack([gx.ravel(), gy.ravel()], axis=1)  # (M,2)
+
+        dx = centers[:, 0:1] - pts[None, :, 0]  # (M,N)
+        dy = centers[:, 1:1+1] - pts[None, :, 1]
+        d2 = dx * dx + dy * dy
+
+        r02 = np.float32(r0 * r0)
+        resid = np.abs(d2 - r02)  # (M,N)
+
+        bestk = np.partition(resid, k - 1, axis=1)[:, :k]  # (M,k)
+        scores = bestk.mean(axis=1)  # (M,)
+
+        best_idx = int(np.argmin(scores))
+        best_center = (float(centers[best_idx, 0]), float(centers[best_idx, 1]))
+        best_score = float(scores[best_idx])
+        return best_center, best_score

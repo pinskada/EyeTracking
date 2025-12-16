@@ -86,7 +86,7 @@ class CrPatternTracker:
         # These are intentionally conservative and can be tuned later.
         self.angle_threshold_rad: float = math.radians(25.0)
         self.radius_rel_threshold: float = 0.5  # 50 % change allowed
-        self.min_detections_for_update: int = max(2, num_crs // 2)
+        self.min_detections_for_update: int = 3
         self.max_missing_frames: int = 5  # currently not enforced aggressively
 
 

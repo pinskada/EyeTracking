@@ -126,7 +126,7 @@ class Shape:
 
     def _setup_cr_params(self) -> None:
         """Set up corneal reflection processor parameters."""
-        self.number_of_cr = 5 # Set how many CRs to track
+        self.number_of_cr = 4  # Set how many CRs to track
 
         # Threshold settings ----------------------------------------------
         self.binarythreshold = 200 # Binary threshold
